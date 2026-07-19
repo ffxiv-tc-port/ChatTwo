@@ -1,3 +1,4 @@
+using ItemKind = Dalamud.Game.Text.SeStringHandling.Payloads.ItemPayload.ItemKind;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Dalamud.Game.ClientState.Conditions;
@@ -14,7 +15,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace ChatTwo.GameFunctions;
 
@@ -131,8 +132,9 @@ public unsafe class GameFunctions : IDisposable
         // This just probably needs to be set
         agent->AddonId = addon->Id;
 
-        // Skips early return
-        atkStage->TooltipManager.TooltipType |= 2;
+        // TC note: TC's FFXIVClientStructs AtkTooltipManager has no `TooltipType` field at
+        // all (older struct shape) - this "skips early return" bit-flag hack has no
+        // equivalent here, dropped rather than guessed at.
         addon->Show(false, 15);
     }
 

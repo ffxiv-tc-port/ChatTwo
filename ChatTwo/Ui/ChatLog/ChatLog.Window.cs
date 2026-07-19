@@ -15,7 +15,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Lumina.Extensions;
 
 namespace ChatTwo.Ui.ChatLog;
@@ -274,10 +274,10 @@ public partial class ChatLog : Window, IChatWindow
         if (!Plugin.Config.ShowTitleBar)
             Flags |= ImGuiWindowFlags.NoTitleBar;
 
-        if (LastViewport == ImGuiHelpers.MainViewport.Handle && !WasDocked)
+        if (LastViewport == ImGuiHelpers.MainViewport.NativePtr && !WasDocked)
             BgAlpha = Plugin.Config.WindowAlpha / 100f;
 
-        LastViewport = ImGui.GetWindowViewport().Handle;
+        LastViewport = ImGui.GetWindowViewport().NativePtr;
         WasDocked = ImGui.IsWindowDocked();
     }
 
@@ -362,7 +362,7 @@ public partial class ChatLog : Window, IChatWindow
         if (resized)
             LastResize.Restart();
 
-        LastViewport = ImGui.GetWindowViewport().Handle;
+        LastViewport = ImGui.GetWindowViewport().NativePtr;
         WasDocked = ImGui.IsWindowDocked();
 
         if (IsChatMode && Plugin.InputPreview.IsDrawable)

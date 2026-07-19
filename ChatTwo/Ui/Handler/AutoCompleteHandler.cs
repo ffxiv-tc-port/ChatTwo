@@ -1,13 +1,13 @@
 ﻿using System.Numerics;
 using ChatTwo.Resources;
 using ChatTwo.Util;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 
 namespace ChatTwo.Ui.Handler;
 
-public class AutoCompleteHandler
+public unsafe class AutoCompleteHandler
 {
     private const string AutoCompleteId = "##chat2-autocomplete";
 
@@ -64,7 +64,7 @@ public class AutoCompleteHandler
             for (var i = 0; i < 10 && i < AutoCompleteList.Count; i++)
             {
                 var num = (i + 1) % 10;
-                var key = ImGuiKey.Key0 + num;
+                var key = ImGuiKey._0 + num;
                 var key2 = ImGuiKey.Keypad0 + num;
                 if (ImGui.IsKeyDown(key) || ImGui.IsKeyDown(key2))
                     selected = i;
@@ -133,19 +133,19 @@ public class AutoCompleteHandler
         ImGui.SetScrollFromPosY(selectedPos - ImGui.GetWindowPos().Y);
     }
 
-    private int AutoCompleteCallback(scoped ref ImGuiInputTextCallbackData data)
+    private int AutoCompleteCallback(ImGuiInputTextCallbackData* data)
     {
         if (FixCursor && AutoCompleteInfo != null)
         {
             FixCursor = false;
-            data.CursorPos = AutoCompleteInfo.ToComplete.Length;
-            data.SelectionStart = data.SelectionEnd = data.CursorPos;
+            data->CursorPos = AutoCompleteInfo.ToComplete.Length;
+            data->SelectionStart = data->SelectionEnd = data->CursorPos;
         }
 
         if (AutoCompleteList == null)
             return 0;
 
-        switch (data.EventKey)
+        switch (data->EventKey)
         {
             case ImGuiKey.UpArrow:
                 if (AutoCompleteSelection == 0)

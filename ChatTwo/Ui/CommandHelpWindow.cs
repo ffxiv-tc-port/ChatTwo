@@ -3,7 +3,7 @@ using ChatTwo.Util;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Lumina.Text.ReadOnly;
 
 namespace ChatTwo.Ui;

@@ -37,7 +37,7 @@ public static class Sheets
 
     public static IEnumerable<World> WorldsOnDatacenter(IPlayerCharacter character)
     {
-        var dcRow = character.HomeWorld.Value.DataCenter.Value.Region.RowId;
-        return WorldSheet.Where(world => world.IsPublic && world.DataCenter.Value.Region.RowId == dcRow);
+        var dcRow = character.HomeWorld.Value.DataCenter.Value.Region;
+        return WorldSheet.Where(world => world.IsPublic && world.DataCenter.Value.Region == dcRow);
     }
 }

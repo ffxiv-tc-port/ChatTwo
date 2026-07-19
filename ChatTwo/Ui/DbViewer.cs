@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using System.Text;
 using ChatTwo.Code;
@@ -11,7 +12,7 @@ using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.ImGuiNotification;
@@ -364,10 +365,10 @@ public class DbViewer : Window
     private ConcurrentStack<Message> Filter(Message[] messages)
     {
         if (SimpleSearchTerm == "")
-            return new ConcurrentStack<Message>(messages.Reverse().OrderByDescending(m => m.Date));
+            return new ConcurrentStack<Message>(Enumerable.Reverse(messages).OrderByDescending(m => m.Date));
 
         return new ConcurrentStack<Message>(
-            messages.Reverse().Where(m =>
+            Enumerable.Reverse(messages).Where(m =>
                 ChunkUtil.ToRawString(m.Sender).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase) ||
                 ChunkUtil.ToRawString(m.Content).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase)
                 ).OrderByDescending(m => m.Date));

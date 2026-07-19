@@ -5,7 +5,7 @@ using ChatTwo.Util;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 
 namespace ChatTwo.Ui;
 

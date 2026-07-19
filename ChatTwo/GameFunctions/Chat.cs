@@ -19,7 +19,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
 using Lumina.Text.ReadOnly;
 
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace ChatTwo.GameFunctions;
 
@@ -560,6 +560,6 @@ public sealed unsafe class Chat : IDisposable
         // second before the cutscene actually starts, because the game sets
         // the cutscene conditions before processing the skip.
         var raptureAtkUnitManager = RaptureAtkUnitManager.Instance();
-        return raptureAtkUnitManager == null || raptureAtkUnitManager->UiFlags.HasFlag(UiFlags.Chat);
+        return raptureAtkUnitManager == null || raptureAtkUnitManager->UiFlags.HasFlag(UIModule.UiFlags.Chat);
     }
 }

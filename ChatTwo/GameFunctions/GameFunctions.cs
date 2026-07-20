@@ -251,6 +251,13 @@ public unsafe class GameFunctions : IDisposable
 
     private nint ResolveTextCommandPlaceholderDetour(nint a1, byte* placeholderText, byte a3, byte a4)
     {
+        // TC note: this native function is sometimes called with a null placeholderText
+        // (observed via crash log while casting a skill - the resulting NullReferenceException
+        // skipped the call to Original() below, leaving the native call chain in a bad state
+        // and crashing a moment later). Fall through to Original() instead of dereferencing null.
+        if (placeholderText == null)
+            return ResolveTextCommandPlaceholderHook!.Original(a1, placeholderText, a3, a4);
+
         var placeholder = MemoryHelper.ReadStringNullTerminated((nint) placeholderText);
         if (ReplacementName == null || placeholder != Placeholder)
             return ResolveTextCommandPlaceholderHook!.Original(a1, placeholderText, a3, a4);

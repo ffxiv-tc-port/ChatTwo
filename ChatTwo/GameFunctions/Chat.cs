@@ -541,17 +541,13 @@ public sealed unsafe class Chat : IDisposable
         return output.AsSpan().ToArray();
     }
 
-    public bool IsCharValid(char c)
-    {
-        var uC = Utf8String.FromString(c.ToString());
-
-        uC->SanitizeString((AllowedEntities) 0x27F);
-        var wasValid = uC->ToString().Length > 0;
-
-        uC->Dtor(true);
-
-        return wasValid;
-    }
+    // TC note: this used to call Utf8String.SanitizeString, a native game function
+    // resolved via a byte-pattern signature baked into FFXIVClientStructs. On the TC
+    // client that signature scan resolves to the wrong address (it doesn't throw at
+    // startup, it just points at garbage), so calling it on every keystroke crashed
+    // the game as soon as any character was typed. Replaced with a plain managed
+    // check since this is only used to filter obviously-invalid characters.
+    public bool IsCharValid(char c) => !char.IsControl(c);
 
     public static bool CheckHideFlags()
     {

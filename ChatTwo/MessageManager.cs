@@ -79,8 +79,20 @@ public class MessageManager : IAsyncDisposable
         PendingMessageThread = new Thread(() => ProcessPendingMessages(PendingThreadCancellationToken.Token));
         PendingMessageThread.Start();
 
-        ContentIdResolverHook = Plugin.GameInteropProvider.HookFromAddress<RaptureLogModule.Delegates.AddMsgSourceEntry>(RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry, ContentIdResolver);
-        ContentIdResolverHook.Enable();
+        // TC note: RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry is
+        // resolved via a byte-pattern signature baked into FFXIVClientStructs
+        // itself. On TC that signature can resolve to the wrong address without
+        // throwing (same silent-mismatch class of bug as the SanitizeString and
+        // RaptureAtkUnitManager.UiFlags issues fixed earlier). Hooking a wrong
+        // address is worse than just reading one: it installs a detour that
+        // redirects every caller of whatever's actually at that address into
+        // this C# delegate with the wrong signature, crashing as soon as that
+        // (unrelated) native code path runs - which lines up with the crash
+        // reports coming from unrelated actions like casting a skill. Disabled
+        // on TC; this only costs us content-ID/account-ID enrichment for chat
+        // messages (used for the right-click "target player" context menu).
+        // ContentIdResolverHook = Plugin.GameInteropProvider.HookFromAddress<RaptureLogModule.Delegates.AddMsgSourceEntry>(RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry, ContentIdResolver);
+        // ContentIdResolverHook.Enable();
 
         Plugin.ChatGui.ChatMessageUnhandled += ChatMessage;
         Plugin.Framework.Update += OnFrameworkUpdate;

@@ -47,7 +47,7 @@ public sealed unsafe class Chat : IDisposable
     private readonly Hook<RaptureShellModule.Delegates.SetContextTellTarget>? SetChatLogTellTargetHook;
 
     // Pointers
-    [Signature("48 8D 1D ?? ?? ?? ?? 8B 05", ScanType = ScanType.StaticAddress)]
+    [Signature("48 8D 35 ?? ?? ?? ?? 8B 05", ScanType = ScanType.StaticAddress)]
     private readonly char* LastTypedCharacter = null!;
 
     private Plugin Plugin { get; }

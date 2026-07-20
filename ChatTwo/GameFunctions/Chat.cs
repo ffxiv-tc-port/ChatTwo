@@ -555,7 +555,14 @@ public sealed unsafe class Chat : IDisposable
         // also been hidden. This prevents Chat 2 from hiding for a split
         // second before the cutscene actually starts, because the game sets
         // the cutscene conditions before processing the skip.
-        var raptureAtkUnitManager = RaptureAtkUnitManager.Instance();
-        return raptureAtkUnitManager == null || raptureAtkUnitManager->UiFlags.HasFlag(UIModule.UiFlags.Chat);
+        //
+        // TC note: RaptureAtkUnitManager.UiFlags sits at FieldOffset 0x9D00 in a
+        // struct sized 0x9D18 - right at the tail end. TC runs an older client
+        // build than the FFXIVClientStructs layout this offset was measured
+        // against, and reading this field crashed the game as soon as a cutscene
+        // or event dialogue actually started (the only time this code path runs).
+        // Skip the anti-flicker optimization entirely on TC; chat just hides a
+        // frame or two earlier during cutscenes instead of crashing.
+        return true;
     }
 }

@@ -265,11 +265,21 @@ public sealed class Plugin : IDalamudPlugin
     public void LanguageChanged(string langCode)
     {
         var info = Config.LanguageOverride is LanguageOverride.None
-            ? new CultureInfo(langCode)
+            ? new CultureInfo(MapDalamudLanguage(langCode))
             : new CultureInfo(Config.LanguageOverride.Code());
 
         Language.Culture = info;
     }
+
+    // TC Dalamud reports UiLanguage "tw", which CultureInfo resolves to the
+    // Twi (Ghana) language, silently falling back to English resources; map
+    // Chinese-flavoured codes onto the shipped zh satellites instead.
+    private static string MapDalamudLanguage(string langCode) => langCode switch
+    {
+        "tw" or "zh-TW" or "zh-Hant" => "zh-Hant",
+        "zh" or "zh-CN" or "zh-Hans" => "zh-Hans",
+        _ => langCode,
+    };
 
     private static readonly string[] ChatAddonNames =
     [

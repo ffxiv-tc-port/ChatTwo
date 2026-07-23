@@ -45,7 +45,7 @@ public partial class ChatLog : Window, IChatWindow
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
 
     public readonly List<bool> PopOutDocked = [];
-    public readonly HashSet<Guid> PopOutWindows = [];
+    public readonly Dictionary<Guid, Popout> PopOutWindows = [];
 
     public ChatLog(Plugin plugin) : base($"{Plugin.PluginName}###chat2")
     {
@@ -95,10 +95,19 @@ public partial class ChatLog : Window, IChatWindow
 
     public unsafe void Activated(ChatActivatedArgs args)
     {
+        // A tab popped out into its own window has its own InputHandler; the main
+        // window's InputHandler is never drawn/focused for it. Route activation to
+        // whichever one is actually on screen for the current tab, or the "Enter to
+        // chat" hotkey would silently type into (and send from) a hidden/unfocused
+        // main-window input box instead of the popout the user is looking at.
+        var activeInput = Plugin.CurrentTab.PopOut && PopOutWindows.TryGetValue(Plugin.CurrentTab.Identifier, out var popout)
+            ? popout.InputHandler
+            : InputHandler;
+
         TellSpecial = args.TellSpecial;
 
-        InputHandler.Activate = true;
-        InputHandler.PlayedClosingSound = false;
+        activeInput.Activate = true;
+        activeInput.PlayedClosingSound = false;
         if (Plugin.Config.PlaySounds)
             UIGlobals.PlaySoundEffect(InputHandler.ChatOpenSfx);
 
@@ -106,26 +115,26 @@ public partial class ChatLog : Window, IChatWindow
         if (Plugin.CurrentTab.InputDisabled)
         {
             // The closing sound would've been immediately played in this case.
-            InputHandler.PlayedClosingSound = true;
+            activeInput.PlayedClosingSound = true;
             return;
         }
 
-        if (args.AddIfNotPresent != null && !InputHandler.ChatInput.Contains(args.AddIfNotPresent))
+        if (args.AddIfNotPresent != null && !activeInput.ChatInput.Contains(args.AddIfNotPresent))
         {
             // Replace the full chat input if it's a command
             if (args.AddIfNotPresent.StartsWith('/'))
-                InputHandler.ChatInput = args.AddIfNotPresent;
+                activeInput.ChatInput = args.AddIfNotPresent;
             else
-                InputHandler.ChatInput += args.AddIfNotPresent;
+                activeInput.ChatInput += args.AddIfNotPresent;
         }
 
         if (args.Input != null)
         {
             // Replace the full chat input if it's a command
             if (args.Input.StartsWith('/'))
-                InputHandler.ChatInput = args.Input;
+                activeInput.ChatInput = args.Input;
             else
-                InputHandler.ChatInput += args.Input;
+                activeInput.ChatInput += args.Input;
         }
 
         var (info, reason, target) = (args.ChannelSwitchInfo, args.TellReason, args.TellTarget);
@@ -209,8 +218,8 @@ public partial class ChatLog : Window, IChatWindow
             }
         }
 
-        if (info.Text != null && InputHandler.ChatInput.Length == 0)
-            InputHandler.ChatInput = info.Text;
+        if (info.Text != null && activeInput.ChatInput.Length == 0)
+            activeInput.ChatInput = info.Text;
     }
 
     public float GetRemainingHeightForMessageLog(bool supportsInputPreview)
@@ -302,6 +311,8 @@ public partial class ChatLog : Window, IChatWindow
         return  InputHandler.FrameTime - lastActivityTime <= 1000 * Plugin.Config.InactivityHideTimeout;
     }
 
+    private static readonly ImGuiCol[] OpacityScaledColours = [ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg];
+
     public override void PreDraw()
     {
         if (Plugin.Config.KeepInputFocus &&  InputHandler.Activate)
@@ -309,10 +320,23 @@ public partial class ChatLog : Window, IChatWindow
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Push();
+
+        // BgAlpha (set in PreOpenCheck) only ever affects ImGuiCol.WindowBg; the
+        // title bar and chat input frame use separate style colours that never
+        // respected the configured opacity, so scale them the same way here,
+        // after any theme override above so this always wins.
+        var alphaScale = Plugin.Config.WindowAlpha / 100f;
+        foreach (var col in OpacityScaledColours)
+        {
+            var c = ImGui.GetStyle().Colors[(int) col];
+            ImGui.PushStyleColor(col, new Vector4(c.X, c.Y, c.Z, c.W * alphaScale));
+        }
     }
 
     public override void PostDraw()
     {
+        ImGui.PopStyleColor(OpacityScaledColours.Length);
+
         // Set Activate to false after draw to avoid repeatedly trying to focus
         // the text input in a tab with input disabled. The usual way that
         // Activate gets disabled is via the text input callback, but that
@@ -984,13 +1008,13 @@ public partial class ChatLog : Window, IChatWindow
             if (!tab.PopOut)
                 continue;
 
-            if (PopOutWindows.Contains(tab.Identifier))
+            if (PopOutWindows.ContainsKey(tab.Identifier))
                 continue;
 
             var window = new Popout(Plugin, tab, i);
 
             Plugin.WindowSystem.AddWindow(window);
-            PopOutWindows.Add(tab.Identifier);
+            PopOutWindows.Add(tab.Identifier, window);
         }
     }
 }

@@ -298,9 +298,16 @@ public sealed class Plugin : IDalamudPlugin
         if (!Config.HideChat)
             return;
 
+        // Tabs with input disabled intentionally fall back to the native chat log
+        // (see Chat.ChatLogRefreshDetour's early-return for InputDisabled tabs) so
+        // the player still has a way to type. "Interactable" here is really the
+        // addon's IsVisible flag, so if it was hidden on a previous frame it needs
+        // to be actively restored, not just left alone, or the native box stays
+        // invisible while still silently capturing/sending keystrokes.
+        var wantInteractable = CurrentTab.InputDisabled;
         foreach (var name in ChatAddonNames)
-            if (GameFunctions.GameFunctions.IsAddonInteractable(name))
-                GameFunctions.GameFunctions.SetAddonInteractable(name, false);
+            if (GameFunctions.GameFunctions.IsAddonInteractable(name) != wantInteractable)
+                GameFunctions.GameFunctions.SetAddonInteractable(name, wantInteractable);
     }
 
     public static bool InBattle => Condition[ConditionFlag.InCombat];

@@ -79,6 +79,9 @@ public class Popout : Window, IChatWindow
 
     public override void PreDraw()
     {
+        if (Plugin.Config.KeepInputFocus && InputHandler.Activate)
+            ImGui.SetWindowFocus(WindowName);
+
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Push();
 
@@ -96,8 +99,20 @@ public class Popout : Window, IChatWindow
         {
             var alpha = Tab.IndependentOpacity ? Tab.Opacity : Plugin.Config.WindowAlpha;
             BgAlpha = alpha / 100f;
+
+            // BgAlpha only covers ImGuiCol.WindowBg; the title bar and chat input
+            // frame use separate style colours that never respected opacity, so
+            // scale them the same way here, after the theme override above.
+            var alphaScale = alpha / 100f;
+            foreach (var col in OpacityScaledColours)
+            {
+                var c = ImGui.GetStyle().Colors[(int) col];
+                ImGui.PushStyleColor(col, new Vector4(c.X, c.Y, c.Z, c.W * alphaScale));
+            }
         }
     }
+
+    private static readonly ImGuiCol[] OpacityScaledColours = [ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg];
 
     public override void Draw()
     {
@@ -155,6 +170,9 @@ public class Popout : Window, IChatWindow
 
     public override void PostDraw()
     {
+        if (!Plugin.ChatLog.PopOutDocked[Idx])
+            ImGui.PopStyleColor(OpacityScaledColours.Length);
+
         Plugin.ChatLog.PopOutDocked[Idx] = ImGui.IsWindowDocked();
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })

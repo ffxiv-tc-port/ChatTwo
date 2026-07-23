@@ -311,7 +311,15 @@ public partial class ChatLog : Window, IChatWindow
         return  InputHandler.FrameTime - lastActivityTime <= 1000 * Plugin.Config.InactivityHideTimeout;
     }
 
-    private static readonly ImGuiCol[] OpacityScaledColours = [ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg];
+    // Note: the visible "New tab | General | ..." strip is a real ImGui tab bar
+    // (DrawTabBar uses ImRaii.TabBar/TabItem), not the native window title bar -
+    // TitleBg/TitleBgActive are kept for when ShowTitleBar is on, but the Tab*
+    // colours are what actually needs scaling for the strip most people see.
+    private static readonly ImGuiCol[] OpacityScaledColours =
+    [
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg,
+        ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
+    ];
 
     public override void PreDraw()
     {

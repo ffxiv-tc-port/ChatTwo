@@ -112,7 +112,11 @@ public class Popout : Window, IChatWindow
         }
     }
 
-    private static readonly ImGuiCol[] OpacityScaledColours = [ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg];
+    private static readonly ImGuiCol[] OpacityScaledColours =
+    [
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg,
+        ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
+    ];
 
     public override void Draw()
     {

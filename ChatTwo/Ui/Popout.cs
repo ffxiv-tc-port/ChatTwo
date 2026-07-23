@@ -114,7 +114,7 @@ public class Popout : Window, IChatWindow
 
     private static readonly ImGuiCol[] OpacityScaledColours =
     [
-        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg,
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg, ImGuiCol.ChildBg,
         ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
     ];
 

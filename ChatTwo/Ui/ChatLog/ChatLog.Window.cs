@@ -315,9 +315,12 @@ public partial class ChatLog : Window, IChatWindow
     // (DrawTabBar uses ImRaii.TabBar/TabItem), not the native window title bar -
     // TitleBg/TitleBgActive are kept for when ShowTitleBar is on, but the Tab*
     // colours are what actually needs scaling for the strip most people see.
+    // ChildBg covers the message log itself: DrawMessageLog opens its own child
+    // window (ImRaii.Child("##chat2-messages", ...)), which paints its own
+    // background independently of the outer window's BgAlpha/WindowBg.
     private static readonly ImGuiCol[] OpacityScaledColours =
     [
-        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg,
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg, ImGuiCol.ChildBg,
         ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
     ];
 

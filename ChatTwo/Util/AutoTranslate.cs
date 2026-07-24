@@ -5,7 +5,6 @@ using System.Text;
 using Dalamud.Game;
 using Dalamud.Utility;
 using Lumina.Excel;
-using Lumina.Text;
 using Lumina.Text.Payloads;
 using Lumina.Text.ReadOnly;
 using Pidgin;
@@ -307,7 +306,8 @@ public static class AutoTranslate
 
     private static byte[] CreateFixedTranslation(uint group, uint key)
     {
-        return new SeStringBuilder()
+        using var rssb = new RentedSeStringBuilder();
+        return rssb.Builder
             .BeginMacro(MacroCode.Fixed)
             .AppendUIntExpression(group - 1)
             .AppendUIntExpression(key)

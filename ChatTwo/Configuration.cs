@@ -7,7 +7,7 @@ using Dalamud;
 using Dalamud.Configuration;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.FontIdentifier;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Lumina.Text.ReadOnly;
 
 namespace ChatTwo;
@@ -104,18 +104,18 @@ public class Configuration : IPluginConfiguration
     public SingleFontSpec GlobalFontV2 = new()
     {
         // dalamud only ships KR as regular, which chat2 used previously for global fonts
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
         SizePt = 12.75f,
     };
     public SingleFontSpec JapaneseFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansJpMedium),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkMedium),
         SizePt = 12.75f,
     };
     public bool ItalicEnabled;
     public SingleFontSpec ItalicFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
         SizePt = 12.75f,
     };
 

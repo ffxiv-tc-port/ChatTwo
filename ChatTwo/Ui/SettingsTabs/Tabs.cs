@@ -3,7 +3,7 @@ using ChatTwo.Resources;
 using ChatTwo.Util;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Interface.Colors;
 
@@ -162,7 +162,7 @@ public sealed class Tabs : ISettingsTab
                     }
                 }
 
-                var player = Plugin.ClientState.LocalPlayer;
+                var player = Plugin.ObjectTable.LocalPlayer;
                 if (tab.Channel == InputChannel.Tell && player != null)
                 {
                     ImGui.Checkbox(Language.Options_Tabs_SenderMessages, ref tab.AllSenderMessages);

@@ -5,7 +5,7 @@ using ChatTwo.GameFunctions;
 using ChatTwo.GameFunctions.Types;
 using ChatTwo.Resources;
 using ChatTwo.Util;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Memory;
@@ -57,7 +57,7 @@ public class InputHandler
         AutoCompleteHandler = new AutoCompleteHandler(this);
     }
 
-    public unsafe void DrawInputArea(Tab activeTab, float inputWidth, ref bool tellSpecial)
+    public void DrawInputArea(Tab activeTab, float inputWidth, ref bool tellSpecial)
     {
         var inputType = activeTab.CurrentChannel.UseTempChannel
             ? activeTab.CurrentChannel.TempChannel.ToChatType()
@@ -177,7 +177,7 @@ public class InputHandler
         return Plugin.CommandManager.Commands.ContainsKey(command) || Plugin.Commands.AllCommands.ContainsKey(command);
     }
 
-    private unsafe int Callback(ImGuiInputTextCallbackData* data)
+    private unsafe int Callback(scoped ref ImGuiInputTextCallbackData data)
     {
         // We play the opening sound here only if closing sound has been played before
         if (Plugin.Config.PlaySounds && PlayedClosingSound)
@@ -189,16 +189,16 @@ public class InputHandler
         // Set the cursor pos to the user selected
         if (Plugin.InputPreview.SelectedCursorPos != -1)
         {
-            data->CursorPos = Plugin.InputPreview.SelectedCursorPos;
+            data.CursorPos = Plugin.InputPreview.SelectedCursorPos;
             Plugin.InputPreview.SelectedCursorPos = -1;
         }
 
-        CursorPos = data->CursorPos;
-        if (data->EventFlag == ImGuiInputTextFlags.CallbackCompletion)
+        CursorPos = data.CursorPos;
+        if (data.EventFlag == ImGuiInputTextFlags.CallbackCompletion)
         {
-            if (data->CursorPos == 0)
+            if (data.CursorPos == 0)
             {
-                AutoCompleteHandler.AutoCompleteInfo = new AutoCompleteInfo(string.Empty, data->CursorPos, data->CursorPos);
+                AutoCompleteHandler.AutoCompleteInfo = new AutoCompleteInfo(string.Empty, data.CursorPos, data.CursorPos);
                 AutoCompleteHandler.AutoCompleteOpen = true;
                 AutoCompleteHandler.AutoCompleteSelection = 0;
 
@@ -206,34 +206,34 @@ public class InputHandler
             }
 
             int white;
-            for (white = data->CursorPos - 1; white >= 0; white--)
-                if (data->Buf[white] == ' ')
+            for (white = data.CursorPos - 1; white >= 0; white--)
+                if (data.Buf[white] == ' ')
                     break;
 
-            var start = data->Buf + white + 1;
-            var end = data->CursorPos - white - 1;
+            var start = data.Buf + white + 1;
+            var end = data.CursorPos - white - 1;
             var utf8Message = Marshal.PtrToStringUTF8((nint)start, end);
-            var correctedCursor = data->CursorPos - (end - utf8Message.Length);
+            var correctedCursor = data.CursorPos - (end - utf8Message.Length);
             AutoCompleteHandler.AutoCompleteInfo = new AutoCompleteInfo(utf8Message, white + 1, correctedCursor);
             AutoCompleteHandler.AutoCompleteOpen = true;
             AutoCompleteHandler.AutoCompleteSelection = 0;
             return 0;
         }
 
-        if (data->EventFlag == ImGuiInputTextFlags.CallbackCharFilter)
-            if (!Plugin.Functions.Chat.IsCharValid((char) data->EventChar))
+        if (data.EventFlag == ImGuiInputTextFlags.CallbackCharFilter)
+            if (!Plugin.Functions.Chat.IsCharValid((char) data.EventChar))
                 return 1;
 
         if (Activate)
         {
             Activate = false;
-            data->CursorPos = ActivatePos > -1 ? ActivatePos : ChatInput.Length;
-            data->SelectionStart = data->SelectionEnd = data->CursorPos;
+            data.CursorPos = ActivatePos > -1 ? ActivatePos : ChatInput.Length;
+            data.SelectionStart = data.SelectionEnd = data.CursorPos;
             ActivatePos = -1;
         }
 
         Plugin.CommandHelpWindow.IsOpen = false;
-        var text = MemoryHelper.ReadString((nint) data->Buf, data->BufTextLen);
+        var text = MemoryHelper.ReadString((nint) data.Buf, data.BufTextLen);
         if (text.StartsWith('/'))
         {
             var command = text.Split(' ')[0];
@@ -243,11 +243,11 @@ public class InputHandler
                 Plugin.CommandHelpWindow.UpdateContent(info.HelpMessage);
         }
 
-        if (data->EventFlag != ImGuiInputTextFlags.CallbackHistory)
+        if (data.EventFlag != ImGuiInputTextFlags.CallbackHistory)
             return 0;
 
         var prevPos = SendHandler.InputBacklogIdx;
-        switch (data->EventKey)
+        switch (data.EventKey)
         {
             case ImGuiKey.UpArrow:
                 switch (SendHandler.InputBacklogIdx)
@@ -279,10 +279,8 @@ public class InputHandler
             return 0;
 
         var historyStr = SendHandler.InputBacklogIdx >= 0 ? SendHandler.InputBacklog[SendHandler.InputBacklogIdx] : string.Empty;
-        ImGuiNative.ImGuiInputTextCallbackData_DeleteChars(data, 0, data->BufTextLen);
-        var historyBytes = System.Text.Encoding.UTF8.GetBytes(historyStr);
-        fixed (byte* historyPtr = historyBytes)
-            ImGuiNative.ImGuiInputTextCallbackData_InsertChars(data, 0, historyPtr, historyPtr + historyBytes.Length);
+        data.DeleteChars(0, data.BufTextLen);
+        data.InsertChars(0, historyStr);
 
         return 0;
     }

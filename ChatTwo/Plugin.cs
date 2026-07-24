@@ -13,7 +13,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.ImGuiFileDialog;
 
 namespace ChatTwo;
@@ -35,19 +35,17 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IKeyState KeyState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] public static IPartyList PartyList { get; private set; } = null!;
-    [PluginService] public static Dalamud.Game.ClientState.Objects.ITargetManager TargetManager { get; private set; } = null!;
+    [PluginService] public static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] public static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
     [PluginService] public static IGameConfig GameConfig { get; private set; } = null!;
     [PluginService] public static INotificationManager Notification { get; private set; } = null!;
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
-    // TC note: no IPlayerState on TC's Dalamud - see ChatTwo/Util/PlayerStateCompat.cs. Kept as
-    // a static property (not just a static class reference) so every existing
-    // `Plugin.PlayerState.X` call site across the repo keeps compiling unchanged.
-    public static ChatTwo.Util.PlayerStateCompatAccessor PlayerState { get; } = new();
-#pragma warning disable SeStringEvaluator
     [PluginService] public static ISeStringEvaluator Evaluator { get; private set; } = null!;
-#pragma warning restore SeStringEvaluator
+
+    // TC note: Dalamud.Plugin.Services.IPlayerState doesn't exist at true API13 either (see
+    // PlayerStateCompat.cs) - wraps IClientState instead of a [PluginService] injection.
+    public static Util.PlayerStateCompatAccessor PlayerState { get; } = new();
 
     public static Configuration Config = null!;
     public static FileDialogManager FileDialogManager { get; private set; } = null!;

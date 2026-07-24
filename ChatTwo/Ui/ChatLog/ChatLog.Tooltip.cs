@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
 using ChatTwo.Util;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Config;
@@ -17,14 +17,14 @@ public partial class ChatLog
         if (!Plugin.GameConfig.TryGet(UiControlOption.DetailTrackingType, out uint selected) || selected != 0)
             return;
 
-        if (LastViewport != ImGuiHelpers.MainViewport.NativePtr)
+        if (LastViewport != ImGuiHelpers.MainViewport.Handle)
             return;
 
         var atk = args.Addon;
-        if (atk == nint.Zero)
+        if (atk.IsNull)
             return;
 
-        var atkBase = (AtkUnitBase*)atk;
+        var atkBase = (AtkUnitBase*)atk.Address;
         if (atkBase->WindowNode == null)
             return;
 

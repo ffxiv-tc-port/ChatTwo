@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using ChatTwo.Code;
 using ChatTwo.Util;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -60,7 +60,7 @@ public class ChunkHandler
         var uv0 = new Vector2(entry.Left, entry.Top + 170) * 2 / texSize;
         var uv1 = new Vector2(entry.Left + entry.Width, entry.Top + entry.Height + 170) * 2 / texSize;
 
-        ImGui.Image(iconTexture.ImGuiHandle, size, uv0, uv1);
+        ImGui.Image(iconTexture.Handle, size, uv0, uv1);
         ImGuiUtil.PostPayload(chunk, handler);
     }
 
@@ -109,7 +109,7 @@ public class ChunkHandler
                 : ColourUtil.RgbaToVector4(type.DefaultColor());
         }
 
-        using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, color ?? default, color != null);
+        using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, color);
 
         var disposableFont = Plugin.Config.FontsEnabled && Plugin.FontManager.ItalicFont != null
             ? Plugin.FontManager.ItalicFont

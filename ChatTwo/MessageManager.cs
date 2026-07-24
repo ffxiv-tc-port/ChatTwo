@@ -223,10 +223,11 @@ public class MessageManager : IAsyncDisposable
     }
 
     public (SeString? Sender, SeString? Message) LastMessage = (null, null);
-    // TC note: TC's Dalamud has no Dalamud.Game.Chat.IChatMessage abstraction (see
-    // ChatTwo/Code/XivChatRelationKind.cs for the full explanation) - ChatMessageUnhandled's
-    // old-API signature is (XivChatType, int timestamp, SeString sender, SeString message), with
-    // no source/target relation info at all, so both are always reported as LocalPlayer.
+
+    // TC note: Dalamud.Game.Chat.IChatMessage doesn't exist at true API13 (see
+    // XivChatRelationKind.cs) - IChatGui.ChatMessageUnhandled still exists at this API level, but
+    // with the old 4-arg delegate shape below (no relation info at all), so Source/Target always
+    // report XivChatRelationKind.LocalPlayer.
     private void ChatMessage(XivChatType type, int timestamp, SeString sender, SeString message)
     {
         LastMessage = (sender, message);

@@ -9,6 +9,7 @@ using ChatTwo.Ui;
 using ChatTwo.Ui.ChatLog;
 using ChatTwo.Util;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;

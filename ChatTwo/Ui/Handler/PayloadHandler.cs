@@ -133,7 +133,7 @@ public sealed class PayloadHandler
 
     private void ContextFooter(bool didCustomContext, Chunk chunk)
     {
-        ImRaii.MenuDisposable menu = default;
+        ImRaii.IEndObject? menu = default;
         if (didCustomContext)
         {
             ImGui.Separator();
@@ -175,7 +175,10 @@ public sealed class PayloadHandler
             ImGui.TextUnformatted(message.Code.Type.Name());
         }
 
-        menu.Dispose();
+        // TC note: unlike the old ImRaii.MenuDisposable struct (default-safe no-op Dispose),
+        // ImRaii.IEndObject is an interface, so `default` is a real null reference - guard the
+        // call since `menu` is left at its default value when didCustomContext is false.
+        menu?.Dispose();
     }
 
     private static string StringifyMessage(Message? message, bool withSender = false)
@@ -533,7 +536,9 @@ public sealed class PayloadHandler
         {
             var party = Plugin.PartyList;
             var leader = party[(int) party.PartyLeaderIndex]?.ContentId;
-            var isLeader = party.Length == 0 || Plugin.PlayerState.ContentId == leader;
+            // TC note: IPartyMember.ContentId is a plain `long` at true API13 (later API
+            // versions widened it to ulong) - cast to compare against Plugin.PlayerState's ulong.
+            var isLeader = party.Length == 0 || Plugin.PlayerState.ContentId == (ulong?) leader;
             var member = party.FirstOrDefault(member => member.Name.TextValue == player.PlayerName && member.World.RowId == world.RowId);
             var isInParty = member != null;
             var inInstance = GameFunctions.GameFunctions.IsInInstance();
@@ -564,10 +569,10 @@ public sealed class PayloadHandler
                 if (isInParty && member != null && (!inInstance || (inInstance && inPartyInstance)))
                 {
                     if (ImGui.Selectable(Language.Context_Promote))
-                        GameFunctions.Party.Promote(player.PlayerName, member.ContentId);
+                        GameFunctions.Party.Promote(player.PlayerName, (ulong) member.ContentId);
 
                     if (ImGui.Selectable(Language.Context_KickFromParty))
-                        GameFunctions.Party.Kick(player.PlayerName, member.ContentId);
+                        GameFunctions.Party.Kick(player.PlayerName, (ulong) member.ContentId);
                 }
             }
 

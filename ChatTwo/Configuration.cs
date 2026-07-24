@@ -104,18 +104,18 @@ public class Configuration : IPluginConfiguration
     public SingleFontSpec GlobalFontV2 = new()
     {
         // dalamud only ships KR as regular, which chat2 used previously for global fonts
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
         SizePt = 12.75f,
     };
     public SingleFontSpec JapaneseFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkMedium),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansJpMedium),
         SizePt = 12.75f,
     };
     public bool ItalicEnabled;
     public SingleFontSpec ItalicFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
         SizePt = 12.75f,
     };
 

@@ -220,7 +220,7 @@ public static class ImGuiUtil
             ImGui.TextUnformatted(text);
     }
 
-    public static ImRaii.ComboDisposable BeginComboVertical(string label, string previewValue, ImGuiComboFlags flags = ImGuiComboFlags.None)
+    public static ImRaii.IEndObject BeginComboVertical(string label, string previewValue, ImGuiComboFlags flags = ImGuiComboFlags.None)
     {
         ImGui.TextUnformatted(label);
         ImGui.SetNextItemWidth(-1);

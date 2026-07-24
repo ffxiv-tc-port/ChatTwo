@@ -363,11 +363,17 @@ public class DbViewer : Window
 
     private ConcurrentStack<Message> Filter(Message[] messages)
     {
+        // TC note: `messages.Reverse()` (extension-method syntax) resolves to
+        // System.MemoryExtensions.Reverse(Span<T>) (an in-place, void-returning reverse) instead
+        // of System.Linq.Enumerable.Reverse(IEnumerable<T>) on the preview SDK/language version
+        // used to build against this Dalamud pin, since arrays implicitly convert to Span<T> and
+        // that overload is now preferred - not a Dalamud API gap. Call Enumerable.Reverse
+        // explicitly to keep the original LINQ (non-mutating) behaviour unambiguous.
         if (SimpleSearchTerm == "")
-            return new ConcurrentStack<Message>(messages.Reverse().OrderByDescending(m => m.Date));
+            return new ConcurrentStack<Message>(Enumerable.Reverse(messages).OrderByDescending(m => m.Date));
 
         return new ConcurrentStack<Message>(
-            messages.Reverse().Where(m =>
+            Enumerable.Reverse(messages).Where(m =>
                 ChunkUtil.ToRawString(m.Sender).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase) ||
                 ChunkUtil.ToRawString(m.Content).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase)
                 ).OrderByDescending(m => m.Date));

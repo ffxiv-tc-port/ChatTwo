@@ -5,7 +5,7 @@ using ChatTwo.Http;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Utility;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -157,7 +157,7 @@ public static class EmoteCache
 
         public virtual void Draw(Vector2 size)
         {
-            ImGui.Image(Texture!.ImGuiHandle, size);
+            ImGui.Image(Texture!.Handle, size);
         }
 
         public async Task<byte[]> LoadAsync(Emote emote)
@@ -239,7 +239,7 @@ public static class EmoteCache
             if (FrameTimer <= 0.0f)
                 FrameTimer = frame.Delay;
 
-            ImGui.Image(frame.Texture.ImGuiHandle, size);
+            ImGui.Image(frame.Texture.Handle, size);
 
             if (GlobalFrameCount == Plugin.Interface.UiBuilder.FrameCount)
                 return;

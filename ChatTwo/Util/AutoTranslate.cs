@@ -307,7 +307,11 @@ public static class AutoTranslate
 
     private static byte[] CreateFixedTranslation(uint group, uint key)
     {
-        return new SeStringBuilder()
+        // TC note: Lumina.Text.RentedSeStringBuilder (pooled/rented builder wrapper) doesn't
+        // exist at true API13 - plain non-pooled SeStringBuilder is the equivalent for this
+        // construction-only use site.
+        var builder = new SeStringBuilder();
+        return builder
             .BeginMacro(MacroCode.Fixed)
             .AppendUIntExpression(group - 1)
             .AppendUIntExpression(key)

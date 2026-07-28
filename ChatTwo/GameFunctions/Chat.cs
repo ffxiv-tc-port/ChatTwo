@@ -562,7 +562,9 @@ public sealed unsafe class Chat : IDisposable
         // against, and reading this field crashed the game as soon as a cutscene
         // or event dialogue actually started (the only time this code path runs).
         // Skip the anti-flicker optimization entirely on TC; chat just hides a
-        // frame or two earlier during cutscenes instead of crashing.
+        // frame or two earlier during cutscenes instead of crashing. DO NOT
+        // restore the native UiFlags read below without a verified TC-API13
+        // binary to check the offset against.
         return true;
     }
 }

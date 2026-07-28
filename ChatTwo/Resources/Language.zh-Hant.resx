@@ -717,7 +717,7 @@
     <value>切換到相同頻道回覆</value>
   </data>
   <data name="Context_Target">
-    <value>選中</value>
+    <value>目標</value>
   </data>
   <data name="ChatType_Debug">
     <value>除錯</value>
@@ -1017,7 +1017,7 @@
         <value>ExtraChat 通訊貝 [8]</value>
     </data>
   <data name="Context_CopyContent">
-    <value>復製內容</value>
+    <value>複製內容</value>
   </data>
   <data name="Context_CopyContentSuccess">
     <value>已複製訊息內容至剪貼簿</value>

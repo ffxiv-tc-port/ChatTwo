@@ -400,9 +400,10 @@ public unsafe class KeybindManager : IDisposable {
         // keys so we don't try to process them immediately on the next frame.
         if (VanillaTextInputHasFocus)
         {
-            foreach (var key in Plugin.KeyState.GetValidVirtualKeys())
-                if (key is not VirtualKey.CONTROL and not VirtualKey.SHIFT and not VirtualKey.MENU)
-                    Plugin.KeyState[key] = false;
+            if (Plugin.Config.InterceptKeybinds)
+                foreach (var key in Plugin.KeyState.GetValidVirtualKeys())
+                    if (key is not VirtualKey.CONTROL and not VirtualKey.SHIFT and not VirtualKey.MENU)
+                        Plugin.KeyState[key] = false;
             VanillaTextInputHasFocus = false;
             return;
         }
@@ -423,6 +424,11 @@ public unsafe class KeybindManager : IDisposable {
             Plugin.ChatLog.ChangeTabDelta(-1);
             return;
         }
+
+        // Hand the game's chat keybinds back to the vanilla chat input when
+        // interception is disabled. ChatTwo's own tab keybinds above still work.
+        if (!Plugin.Config.InterceptKeybinds)
+            return;
 
         // Only process the active combo with the most modifiers.
         var currentBest = (VirtualKey.NO_KEY, "", 0);

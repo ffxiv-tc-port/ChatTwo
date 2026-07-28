@@ -1162,6 +1162,12 @@
     <data name="Options_AdjustPosition_Warning" xml:space="preserve">
         <value>Attention, this change applies immediately and is not discardable!</value>
     </data>
+    <data name="Options_InterceptKeybinds_Name" xml:space="preserve">
+        <value>Intercept game chat keybinds</value>
+    </data>
+    <data name="Options_InterceptKeybinds_Description" xml:space="preserve">
+        <value>Take over the game's chat keybinds (open chat, reply, channel shortcuts) and focus the ChatTwo input instead. Disable this to hand those keys back to the vanilla chat input.</value>
+    </data>
     <data name="Options_KeepInputFocus_Name" xml:space="preserve">
         <value>Keep input focus</value>
     </data>

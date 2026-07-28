@@ -2905,6 +2905,24 @@ namespace ChatTwo.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Take over the game&apos;s chat keybinds (open chat, reply, channel shortcuts) and focus the ChatTwo input instead..
+        /// </summary>
+        internal static string Options_InterceptKeybinds_Description {
+            get {
+                return ResourceManager.GetString("Options_InterceptKeybinds_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Intercept game chat keybinds.
+        /// </summary>
+        internal static string Options_InterceptKeybinds_Name {
+            get {
+                return ResourceManager.GetString("Options_InterceptKeybinds_Name", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Keeps the input focus, even if you enter battle or do other actions..
         /// </summary>
         internal static string Options_KeepInputFocus_Description {

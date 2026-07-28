@@ -125,7 +125,7 @@
     <value>隱藏原版聊天視窗</value>
   </data>
   <data name="Options_HideChat_Description">
-    <value>當挿件處於啟動狀態時隱藏遊戲內聊天視窗。</value>
+    <value>當插件處於啟動狀態時隱藏遊戲內聊天視窗。</value>
   </data>
   <data name="Options_HideDuringCutscenes_Name">
     <value>播放過場動畫時隱藏聊天視窗</value>
@@ -134,10 +134,10 @@
     <value>播放過場動畫時隱藏{0}。</value>
   </data>
   <data name="Options_NativeItemTooltips_Name">
-    <value>顯示原始道具幇助</value>
+    <value>顯示原始道具幫助</value>
   </data>
   <data name="Options_NativeItemTooltips_Description">
-    <value>當滑鼠懸停在 {0} 中的道具時，顯示遊戲中的道具幇助。</value>
+    <value>當滑鼠懸停在 {0} 中的道具時，顯示遊戲中的道具幫助。</value>
   </data>
   <data name="Options_SidebarTabView_Name">
     <value>在側邊欄中顯示標籤頁</value>
@@ -212,7 +212,7 @@
     <value>標籤頁</value>
   </data>
   <data name="Options_Tabs_Add">
-    <value>新増</value>
+    <value>新增</value>
   </data>
   <data name="Options_Tabs_Delete">
     <value>刪除</value>
@@ -423,7 +423,7 @@
     <value>命令幫助方向 (無 = 關閉)</value>
   </data>
   <data name="Options_CommandHelpSide_Description">
-    <value>{0} 的一側顯示命令幇助。</value>
+    <value>{0} 的一側顯示命令幫助。</value>
   </data>
   <data name="Options_HideWhenUiHidden_Name">
     <value>當遊戲介面隱藏時隱藏</value>
@@ -501,7 +501,7 @@
     <value>將戰鬥訊息儲存到資料庫</value>
   </data>
   <data name="Options_DatabaseBattleMessages_Description">
-    <value>如果將戰鬥訊息儲存到資料庫中，資料庫的大小將會更快増長，儲存設定時會出現明顯的遲鈍。 建議禁用此功能。</value>
+    <value>如果將戰鬥訊息儲存到資料庫中，資料庫的大小將會更快增長，儲存設定時會出現明顯的遲鈍。 建議禁用此功能。</value>
   </data>
   <data name="Options_LoadPreviousSession_Name">
     <value>登入時顯示之前的聊天會話</value>
@@ -624,7 +624,7 @@
     <value>額外的字型</value>
   </data>
   <data name="Options_ExtraGlyphs_Description">
-    <value>啟用下面的核取方塊，可以將額外的字形新増到 {0} 的全域性字型中。這可能需要増加Dalamud字型圖集的大小。</value>
+    <value>啟用下面的核取方塊，可以將額外的字形新增到 {0} 的全域性字型中。這可能需要增加Dalamud字型圖集的大小。</value>
   </data>
   <data name="ExtraGlyphRanges_ChineseFull_Name">
     <value>中文(完整)</value>
@@ -702,7 +702,7 @@
     <value>傳送好友申請</value>
   </data>
   <data name="Context_AddToBlacklist">
-    <value>加入到黒名單</value>
+    <value>加入到黑名單</value>
   </data>
   <data name="Context_AddToMuteList">
     <value>加入到禁音名單</value>
@@ -729,7 +729,7 @@
     <value>通知</value>
   </data>
   <data name="ChatType_Say">
-    <value>説話</value>
+    <value>說話</value>
   </data>
   <data name="ChatType_Shout">
     <value>喊話</value>
@@ -921,7 +921,7 @@
     <value>悄悄話(遊戲管理員)</value>
   </data>
   <data name="ChatType_GmSay">
-    <value>説話(遊戲管理員)</value>
+    <value>說話(遊戲管理員)</value>
   </data>
   <data name="ChatType_GmShout">
     <value>喊話(遊戲管理員)</value>

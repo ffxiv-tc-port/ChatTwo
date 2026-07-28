@@ -771,7 +771,7 @@
     <value>通訊貝 [8]</value>
   </data>
   <data name="ChatType_FreeCompany">
-    <value>部隊</value>
+    <value>公會</value>
   </data>
   <data name="ChatType_NoviceNetwork">
     <value>新人頻道</value>
@@ -885,10 +885,10 @@
     <value>非玩家角色通告</value>
   </data>
   <data name="ChatType_FreeCompanyAnnouncement">
-    <value>部隊通告部隊通告</value>
+    <value>公會通告</value>
   </data>
   <data name="ChatType_FreeCompanyLoginLogout">
-    <value>部隊成員上線通知</value>
+    <value>公會成員上線通知</value>
   </data>
   <data name="ChatType_RetainerSale">
     <value>市場出售資訊</value>
@@ -933,7 +933,7 @@
     <value>小隊(遊戲管理員)</value>
   </data>
   <data name="ChatType_GmFreeCompany">
-    <value>部隊(遊戲管理員)</value>
+    <value>公會(遊戲管理員)</value>
   </data>
   <data name="ChatType_GmLinkshell1">
     <value>通訊貝 [1] (遊戲管理員)</value>

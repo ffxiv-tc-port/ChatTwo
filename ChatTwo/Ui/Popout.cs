@@ -189,6 +189,7 @@ public class Popout : Window, IChatWindow
         Plugin.WindowSystem.RemoveWindow(this);
 
         Tab.PopOut = false;
+        Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
         Plugin.SaveConfig();
     }
 

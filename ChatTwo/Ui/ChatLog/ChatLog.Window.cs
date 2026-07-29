@@ -302,12 +302,23 @@ public partial class ChatLog : Window, IChatWindow
             return true;
         }
 
+        // Equivalent to (but avoids re-scanning Plugin.Config.Tabs every single frame):
+        //   Plugin.Config.Tabs
+        //       .Where(tab => !tab.PopOut && (tab.UnhideOnActivity || tab == currentTab))
+        //       .Select(tab => tab.LastActivity)
+        //       .Append(InputHandler.LastActivityTime)
+        //       .Max();
+        // MaxUnhideEligibleTabActivity is a running max cache covering every tab except the
+        // "or == currentTab" special case, kept in sync whenever a tab's LastActivity changes
+        // or tab/PopOut/UnhideOnActivity membership changes (see its doc comment). The current
+        // tab still varies frame-to-frame, so it's checked live here, but that's an O(1) check.
         var currentTab = Plugin.CurrentTab; // local to avoid calling the getter repeatedly
-        var lastActivityTime = Plugin.Config.Tabs
-            .Where(tab => !tab.PopOut && (tab.UnhideOnActivity || tab == currentTab))
-            .Select(tab => tab.LastActivity)
-            .Append( InputHandler.LastActivityTime)
-            .Max();
+        var lastActivityTime = Plugin.Config.MaxUnhideEligibleTabActivity;
+        if (!currentTab.PopOut && currentTab.LastActivity > lastActivityTime)
+            lastActivityTime = currentTab.LastActivity;
+        if (InputHandler.LastActivityTime > lastActivityTime)
+            lastActivityTime = InputHandler.LastActivityTime;
+
         return  InputHandler.FrameTime - lastActivityTime <= 1000 * Plugin.Config.InactivityHideTimeout;
     }
 
@@ -966,6 +977,7 @@ public partial class ChatLog : Window, IChatWindow
         {
             tabs.RemoveAt(i);
             Plugin.WantedTab = 0;
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
 
             anyChanged = true;
         }
@@ -998,6 +1010,7 @@ public partial class ChatLog : Window, IChatWindow
         if (ImGuiUtil.IconButton(FontAwesomeIcon.WindowRestore, tooltip: Language.ChatLog_Tabs_PopOut))
         {
             tab.PopOut = true;
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
             anyChanged = true;
         }
 

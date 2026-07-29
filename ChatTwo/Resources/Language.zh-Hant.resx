@@ -254,7 +254,7 @@
     <value>永遠不會顯示未讀數。</value>
   </data>
   <data name="Tab_DefaultName">
-    <value>新建標籤頁</value>
+    <value>新增標籤頁</value>
   </data>
   <data name="Settings_SaveAndClose">
     <value>儲存並關閉</value>
@@ -1383,7 +1383,7 @@
         <value>網頁介面將使用的連接埠。</value>
     </data>
   <data name="Options_Webinterface_Warning_Header" xml:space="preserve">
-        <value>勾選「啟用」並點擊「啟動」後，會載入 Chat2 的內建網頁介面，讓你網路上的裝置能夠存取遊戲內聊天。此功能可讓手機或另一台電腦查看 Chat2 的活動、切換頻道並傳送訊息，就如同你在 FFXIV 中親自輸入一樣。</value>
+        <value>勾選「啟用」並點選「啟動」後，會載入 Chat2 的內建網頁介面，讓你網路上的裝置能夠存取遊戲內聊天。此功能可讓手機或另一台電腦查看 Chat2 的活動、切換頻道並傳送訊息，就如同你在 FFXIV 中親自輸入一樣。</value>
     </data>
   <data name="Options_Webinterface_Warning_Reason" xml:space="preserve">
         <value>基於帳號安全考量，此功能不適合在區域網路之外使用，已經警告過你了！</value>

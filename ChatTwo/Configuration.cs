@@ -125,6 +125,23 @@ public class Configuration : IPluginConfiguration
     public Dictionary<ChatType, uint> ChatColours = new();
     public List<Tab> Tabs = [];
 
+    // Running-max cache for ChatLog.DrawConditions()'s "hide when inactive" check: the max
+    // LastActivity across tabs that are always eligible to keep the window shown
+    // (!PopOut && UnhideOnActivity). Kept in sync incrementally from Tab.AddMessage and
+    // recalculated wholesale wherever tab membership (PopOut/UnhideOnActivity/the Tabs list
+    // itself) can change, so DrawConditions never has to re-scan Tabs every frame.
+    [NonSerialized] public long MaxUnhideEligibleTabActivity;
+
+    public void RecalculateMaxUnhideEligibleTabActivity()
+    {
+        var max = 0L;
+        foreach (var tab in Tabs)
+            if (!tab.PopOut && tab.UnhideOnActivity && tab.LastActivity > max)
+                max = tab.LastActivity;
+
+        MaxUnhideEligibleTabActivity = max;
+    }
+
     public bool OverrideStyle;
     public string? ChosenStyle;
 
@@ -214,6 +231,8 @@ public class Configuration : IPluginConfiguration
         WebinterfacePort = other.WebinterfacePort;
         WebinterfaceMaxLinesToSend = other.WebinterfaceMaxLinesToSend;
         MigrationStatus = other.MigrationStatus;
+
+        RecalculateMaxUnhideEligibleTabActivity();
     }
 }
 
@@ -324,7 +343,17 @@ public class Tab
 
         Unread += 1;
         if (message.Matches(Plugin.Config.InactivityHideChannelsV2, Plugin.Config.InactivityHideExtraChatAll, Plugin.Config.InactivityHideExtraChatChannels))
+        {
             LastActivity = Environment.TickCount64;
+
+            // Keep Configuration.MaxUnhideEligibleTabActivity's running max in sync instead of
+            // ChatLog.DrawConditions() having to re-scan every tab each frame. Only tabs that
+            // are unconditionally eligible (not popped out, UnhideOnActivity) feed this cache;
+            // the current-tab special case is still checked live in DrawConditions since it's
+            // an O(1) check.
+            if (!PopOut && UnhideOnActivity && LastActivity > Plugin.Config.MaxUnhideEligibleTabActivity)
+                Plugin.Config.MaxUnhideEligibleTabActivity = LastActivity;
+        }
     }
 
     public void Clear()

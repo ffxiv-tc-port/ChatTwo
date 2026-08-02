@@ -3587,7 +3587,16 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_Tabs_NoInputChannel", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to &lt;No worlds available&gt;.
+        /// </summary>
+        internal static string Options_Tabs_NoWorldsAvailable {
+            get {
+                return ResourceManager.GetString("Options_Tabs_NoWorldsAvailable", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Opacity.
         /// </summary>

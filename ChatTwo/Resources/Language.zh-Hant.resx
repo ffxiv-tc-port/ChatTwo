@@ -238,6 +238,9 @@
   <data name="Options_Tabs_NoInputChannel">
     <value>&lt;無&gt;</value>
   </data>
+  <data name="Options_Tabs_NoWorldsAvailable">
+    <value>&lt;無可用世界&gt;</value>
+  </data>
   <data name="Options_Tabs_InputChannel">
     <value>輸入頻道</value>
   </data>

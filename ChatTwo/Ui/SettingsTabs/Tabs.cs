@@ -183,27 +183,38 @@ public sealed class Tabs : ISettingsTab
 
                         ImGui.SameLine();
 
-                        var selectedWorld = worlds.FindIndex(world => world.RowId == tab.TellTarget.World);
-                        if (selectedWorld == -1)
-                            selectedWorld = 0;
-
-                        using (var combo = ImRaii.Combo("###player-world", worlds[selectedWorld].Name.ToString()))
+                        // TC note: worlds 有可能是空集合(查詢異常、資料來源缺漏等),
+                        // 空集合上直接索引 worlds[0] 或呼叫 .First() 會丟例外,
+                        // 而這段程式碼在密語分頁被畫的時候每幀都會執行,一旦丟例外就是每幀當機。
+                        if (worlds.Count == 0)
                         {
-                            if (combo.Success)
-                            {
-                                var lastDc = worlds.First().DataCenter.RowId;
-                                foreach (var (idx, world) in worlds.Index())
-                                {
-                                    if (lastDc != world.DataCenter.RowId)
-                                    {
-                                        lastDc = world.DataCenter.RowId;
-                                        ImGui.Separator();
-                                    }
+                            using var _ = ImRaii.Disabled();
+                            using var combo = ImRaii.Combo("###player-world", Language.Options_Tabs_NoWorldsAvailable);
+                        }
+                        else
+                        {
+                            var selectedWorld = worlds.FindIndex(world => world.RowId == tab.TellTarget.World);
+                            if (selectedWorld == -1)
+                                selectedWorld = 0;
 
-                                    if (ImGui.Selectable(world.Name.ToString(), selectedWorld == idx))
+                            using (var combo = ImRaii.Combo("###player-world", worlds[selectedWorld].Name.ToString()))
+                            {
+                                if (combo.Success)
+                                {
+                                    var lastDc = worlds.First().DataCenter.RowId;
+                                    foreach (var (idx, world) in worlds.Index())
                                     {
-                                        selectedWorld = idx;
-                                        tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        if (lastDc != world.DataCenter.RowId)
+                                        {
+                                            lastDc = world.DataCenter.RowId;
+                                            ImGui.Separator();
+                                        }
+
+                                        if (ImGui.Selectable(world.Name.ToString(), selectedWorld == idx))
+                                        {
+                                            selectedWorld = idx;
+                                            tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        }
                                     }
                                 }
                             }

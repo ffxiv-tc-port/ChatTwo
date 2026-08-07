@@ -187,6 +187,11 @@ public sealed unsafe class Chat : IDisposable
 
         string? addIfNotPresent = null;
 
+        // 🔴 `value + 2` 是**沒有上界的**陣列索引 —— 這個 detour 的簽章沒有帶 valueCount，所以離線
+        //    無從得知第 3 格真的存在。讀到配置外是 AccessViolationException，try/catch 攔不到，
+        //    包 try 只會看起來有防護。真正把它擋住的是上面 line 157 的 eventId/UInt 判別式：
+        //    只有 eventId==0x31 且 value[0].UInt 是 0x05/0x0C 才會走到這裡。
+        //    ⚠️ 這條假設沒有離線證據，維持上游原樣；要改必須先實機量到 valueCount。
         var str = value + 2;
         if (str != null && ((int) str->Type & 0xF) == (int) ValueType.String && str->String.HasValue)
         {
@@ -195,6 +200,14 @@ public sealed unsafe class Chat : IDisposable
                 addIfNotPresent = add;
         }
 
+        // fail-closed: Original is kept OUTSIDE the try. Everything this try guards is ChatTwo's own
+        // code - Plugin.ChatLog.TellSpecial is our own field and Plugin.ChatLog.Activated is our own
+        // method (Ui/ChatLog/ChatLog.Window.cs), not a third-party callback - so the exceptions it
+        // catches are ours, and swallowing them is right. Original(), by contrast, is the game's own
+        // AddonChatLog.OnRefresh: it used to sit inside the try, which meant a throw from it (or from
+        // a null ChatLogRefreshHook) would have been swallowed and turned into `return 1`, i.e. the
+        // game silently loses the refresh AND the chat log stops being focusable.
+        var deferToVanilla = false;
         try
         {
             // We already called this function once, so we skip the duplicated call
@@ -202,15 +215,20 @@ public sealed unsafe class Chat : IDisposable
             if (Plugin.ChatLog.TellSpecial)
             {
                 Plugin.Log.Information("Return early to prevent duplicated call...");
-                return ChatLogRefreshHook!.Original(log, eventId, value);
+                deferToVanilla = true;
             }
-
-            Plugin.ChatLog.Activated(new ChatActivatedArgs(new ChannelSwitchInfo(null)) { AddIfNotPresent = addIfNotPresent });
+            else
+            {
+                Plugin.ChatLog.Activated(new ChatActivatedArgs(new ChannelSwitchInfo(null)) { AddIfNotPresent = addIfNotPresent });
+            }
         }
         catch (Exception ex)
         {
             Plugin.Log.Error(ex, "Error in chat Activated event");
         }
+
+        if (deferToVanilla)
+            return ChatLogRefreshHook!.Original(log, eventId, value);
 
         // prevent the game from focusing the chat log
         return 1;
@@ -258,7 +276,17 @@ public sealed unsafe class Chat : IDisposable
 
     private void ReplyInSelectedChatModeDetour(RaptureShellModule* agent)
     {
-        var replyMode = AgentChatLog.Instance()->ReplyChannel;
+        // AgentChatLog.Instance() really can be null - Login() above checks for exactly that - and
+        // dereferencing it is an AccessViolationException, which try/catch cannot intercept in .NET
+        // Core. fail-closed: if we cannot read the reply channel, just let the game do its own thing.
+        var chatLog = AgentChatLog.Instance();
+        if (chatLog == null)
+        {
+            ReplyInSelectedChatModeHook!.Original(agent);
+            return;
+        }
+
+        var replyMode = chatLog->ReplyChannel;
         if (replyMode == -2)
         {
             ReplyInSelectedChatModeHook!.Original(agent);

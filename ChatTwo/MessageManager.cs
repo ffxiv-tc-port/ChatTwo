@@ -258,9 +258,14 @@ public class MessageManager : IAsyncDisposable
     // called for each message.
     private unsafe void ContentIdResolver(RaptureLogModule* agent, ulong contentId, ulong accountId, int messageIndex, ushort worldId, ushort chatType)
     {
+        // fail-closed: Original is kept outside the try. It used to be the first statement *inside* it,
+        // so a throw from the game's own call would have been swallowed and silently turned into "this
+        // message never got resolved". Our own bookkeeping below is what the try is actually for -
+        // PendingSync.Last() races with the queue being drained and throws InvalidOperationException.
+        ContentIdResolverHook?.Original(agent, contentId, accountId, messageIndex, worldId, chatType);
+
         try
         {
-            ContentIdResolverHook?.Original(agent, contentId, accountId, messageIndex, worldId, chatType);
             if (PendingSync.Count == 0)
                 return;
 

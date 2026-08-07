@@ -451,6 +451,17 @@ public unsafe class KeybindManager : IDisposable {
         if (!Plugin.Config.InterceptKeybinds)
             return;
 
+        // A tab with input disabled deliberately falls back to the native chat log - the
+        // addon-visibility restore in Plugin.DrawUi and ChatLogRefreshDetour's early return are the
+        // other two halves of that same decision. Keybind interception was the half that never got
+        // the memo: it swallowed Enter and the slash keys while ChatTwo had nowhere to put them and
+        // the native box was the only place left to type, so the player ended up with no chat input
+        // at all. Having every tab set to input-disabled is a supported configuration, so this
+        // cannot be left to the InterceptKeybinds toggle - nobody would think to look at a setting
+        // they never touched, and the symptom points at the game rather than at us.
+        if (Plugin.CurrentTab.InputDisabled)
+            return;
+
         // Only process the active combo with the most modifiers.
         var currentBest = (VirtualKey.NO_KEY, "", 0);
         foreach (var (toIntercept, keybind) in Keybinds)

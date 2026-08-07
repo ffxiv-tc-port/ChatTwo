@@ -658,6 +658,24 @@
     <data name="Context_HideChat">
         <value>Hide chat</value>
     </data>
+    <data name="Context_ChannelDisable">
+        <value>Stop showing "{0}" in this tab</value>
+    </data>
+    <data name="Context_ChannelDisabledNotice">
+        <value>"{0}" will no longer be shown in this tab. To bring it back: Settings &gt; Tabs &gt; Channels.</value>
+    </data>
+    <data name="Context_ChannelMenu">
+        <value>Messages shown in this tab</value>
+    </data>
+    <data name="Context_ChannelAlwaysShown">
+        <value>GM messages are always shown, regardless of a tab's channel settings.</value>
+    </data>
+    <data name="Context_ChannelExtraChat">
+        <value>ExtraChat linkshells are configured under Settings &gt; Tabs &gt; ExtraChat channels.</value>
+    </data>
+    <data name="Context_ChannelAlreadyHidden">
+        <value>"{0}" is already not shown in this tab.</value>
+    </data>
     <data name="Context_Copy">
         <value>Copy</value>
     </data>

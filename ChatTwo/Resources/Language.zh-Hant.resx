@@ -659,6 +659,24 @@
   <data name="Context_HideChat">
     <value>隱藏聊天窗</value>
   </data>
+  <data name="Context_ChannelDisable">
+    <value>在此標籤頁停用「{0}」</value>
+  </data>
+  <data name="Context_ChannelDisabledNotice">
+    <value>已在此標籤頁停用「{0}」。要救回來：設定 &gt; 標籤頁 &gt; 頻道，重新勾選即可。</value>
+  </data>
+  <data name="Context_ChannelMenu">
+    <value>此標籤頁顯示的訊息</value>
+  </data>
+  <data name="Context_ChannelAlwaysShown">
+    <value>GM 訊息一律顯示，不受標籤頁的頻道設定影響。</value>
+  </data>
+  <data name="Context_ChannelExtraChat">
+    <value>ExtraChat 通訊貝請在 設定 &gt; 標籤頁 &gt; ExtraChat頻道 調整。</value>
+  </data>
+  <data name="Context_ChannelAlreadyHidden">
+    <value>「{0}」原本就沒有在此標籤頁顯示。</value>
+  </data>
   <data name="Context_Copy">
     <value>複製</value>
   </data>

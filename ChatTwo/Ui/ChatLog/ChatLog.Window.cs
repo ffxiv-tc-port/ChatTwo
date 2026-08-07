@@ -41,6 +41,17 @@ public partial class ChatLog : Window, IChatWindow
     public bool IsHidden;
     public HideState CurrentHideState { get; set; } = HideState.None;
 
+    // Plugin.CurrentTab hands back a throwaway `new Tab()` when LastTab is out of range, so
+    // anything written through it is silently lost. Context menus need the real object or null.
+    public Tab? ContextTab
+    {
+        get
+        {
+            var idx = Plugin.LastTab;
+            return idx > -1 && idx < Plugin.Config.Tabs.Count ? Plugin.Config.Tabs[idx] : null;
+        }
+    }
+
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
 

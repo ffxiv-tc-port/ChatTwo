@@ -72,6 +72,11 @@ public sealed class Plugin : IDalamudPlugin
 
     public int DeferredSaveFrames = -1;
 
+    // Turning a channel back on for a tab needs a re-filter to back-fill the messages that were
+    // previously excluded, but that hits SQLite on a shared connection. Coalesce bursts of
+    // toggles into a single run instead of firing one per click.
+    public int DeferredFilterFrames = -1;
+
     public DateTime GameStarted { get; }
 
     public Vector4 DefaultText = Vector4.Zero;
@@ -300,6 +305,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (DeferredSaveFrames >= 0 && DeferredSaveFrames-- == 0)
             SaveConfig();
+
+        if (DeferredFilterFrames >= 0 && DeferredFilterFrames-- == 0)
+            MessageManager.FilterAllTabsAsync();
 
         if (!Config.HideChat)
             return;

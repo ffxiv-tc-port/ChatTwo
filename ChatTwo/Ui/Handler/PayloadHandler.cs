@@ -171,14 +171,134 @@ public sealed class PayloadHandler
                 WrapperUtil.AddNotification(Language.Context_CopyContentSuccess, NotificationType.Info);
             }
 
-            using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int) ImGuiCol.TextDisabled]);
-            ImGui.TextUnformatted(message.Code.Type.Name());
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int) ImGuiCol.TextDisabled]))
+                ImGui.TextUnformatted(message.Code.Type.DisplayName());
+
+            DrawChannelControls(message);
         }
 
         // TC note: unlike the old ImRaii.MenuDisposable struct (default-safe no-op Dispose),
         // ImRaii.IEndObject is an interface, so `default` is a real null reference - guard the
         // call since `menu` is left at its default value when didCustomContext is false.
         menu?.Dispose();
+    }
+
+    /// <summary>
+    /// Per-tab channel controls. The one-click item turns off the channel this message arrived
+    /// on; the submenu exists so a channel can be turned back on without opening the settings
+    /// window and hunting through the channel tree.
+    /// </summary>
+    private void DrawChannelControls(Message message)
+    {
+        var tab = InputHandler.MainWindow.ContextTab;
+        if (tab == null)
+            return;
+
+        var type = message.Code.Type;
+        var name = type.DisplayName();
+        var tellTab = tab.Channel == InputChannel.Tell && tab.TellTarget.IsSet();
+
+        // SelectedChannels is bypassed entirely for tell-target tabs (Tab.Matches), and for GM
+        // messages and ExtraChat linkshells (Message.Matches). Removing an entry in any of those
+        // cases would report success and change nothing, so grey the item out and say why.
+        string? blocked = null;
+        if (tellTab)
+            blocked = Language.Options_Tabs_TellTabChannelSelection;
+        else if (type.IsGm())
+            blocked = Language.Context_ChannelAlwaysShown;
+        else if (message.ExtraChatChannel != Guid.Empty)
+            blocked = Language.Context_ChannelExtraChat;
+        else if (!tab.SelectedChannels.ContainsKey(type))
+            blocked = string.Format(Language.Context_ChannelAlreadyHidden, name);
+
+        ImGui.Separator();
+
+        using (ImRaii.Disabled(blocked != null))
+        {
+            if (ImGui.Selectable(string.Format(Language.Context_ChannelDisable, name)) && blocked == null)
+            {
+                tab.SelectedChannels.Remove(type);
+                InputHandler.Plugin.SaveConfig();
+
+                // Also drop what is already on screen, otherwise it looks like nothing happened
+                // until the hidden messages scroll off the top.
+                tab.Messages.RemoveWhere(m => m.Code.Type == type);
+
+                WrapperUtil.AddNotification(string.Format(Language.Context_ChannelDisabledNotice, name), NotificationType.Info, false);
+            }
+        }
+
+        if (blocked != null && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(blocked);
+
+        if (tellTab)
+        {
+            // Wrapping a menu in BeginDisabled is ambiguous (the popup would inherit the disabled
+            // item flags), so show a plain greyed row carrying the reason instead of a dead
+            // submenu the user can hover but never open.
+            using (ImRaii.Disabled(true))
+                ImGui.Selectable(Language.Context_ChannelMenu);
+
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(Language.Options_Tabs_TellTabChannelSelection);
+
+            return;
+        }
+
+        DrawChannelToggles(tab);
+    }
+
+    private void DrawChannelToggles(Tab tab)
+    {
+        using var menu = ImRaii.Menu(Language.Context_ChannelMenu);
+        if (!menu.Success)
+            return;
+
+        // Reuse the settings window's grouping (ChatTypeExt.SortOrder) instead of enumerating the
+        // ChatType enum: it is the same user-facing channels, in the same order, under the same
+        // four headers, so this list and the settings list cannot drift apart. Enumerating the
+        // enum would produce 89 entries including GM and ExtraChat types that this cannot affect.
+        foreach (var (header, types) in ChatTypeExt.SortOrder)
+        {
+            var selectable = types.Where(channel => !channel.IsGm()).ToArray();
+            if (selectable.Length == 0)
+                continue;
+
+            var enabledCount = selectable.Count(tab.SelectedChannels.ContainsKey);
+
+            using var pushedId = ImRaii.PushId(header);
+
+            // ### keeps the submenu's ImGui id stable while the counter in its label changes -
+            // without it, ticking a box would change the id and close the menu being worked in.
+            using var group = ImRaii.Menu($"{header} ({enabledCount}/{selectable.Length})###group");
+            if (!group.Success)
+                continue;
+
+            foreach (var channel in selectable)
+            {
+                // A checkbox rather than a MenuItem: MenuItem closes the whole popup stack when
+                // clicked, which would mean one right-click per channel.
+                var enabled = tab.SelectedChannels.ContainsKey(channel);
+                if (!ImGui.Checkbox($"{channel.DisplayName()}##chan-{(ushort) channel}", ref enabled))
+                    continue;
+
+                if (enabled)
+                {
+                    tab.SelectedChannels[channel] = (ChatSourceExt.All, ChatSourceExt.All);
+
+                    // Back-fill the messages this tab had been filtering out. Deferred so a burst
+                    // of ticks doesn't queue one SQLite pass per click.
+                    InputHandler.Plugin.DeferredFilterFrames = 30;
+                }
+                else
+                {
+                    tab.SelectedChannels.Remove(channel);
+                    tab.Messages.RemoveWhere(message => message.Code.Type == channel);
+                }
+
+                InputHandler.Plugin.SaveConfig();
+            }
+        }
     }
 
     private static string StringifyMessage(Message? message, bool withSender = false)

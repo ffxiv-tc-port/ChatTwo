@@ -1275,6 +1275,60 @@ namespace ChatTwo.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Stop showing "{0}" in this tab.
+        /// </summary>
+        internal static string Context_ChannelDisable {
+            get {
+                return ResourceManager.GetString("Context_ChannelDisable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to "{0}" will no longer be shown in this tab. To bring it back: Settings > Tabs > Channels..
+        /// </summary>
+        internal static string Context_ChannelDisabledNotice {
+            get {
+                return ResourceManager.GetString("Context_ChannelDisabledNotice", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages shown in this tab.
+        /// </summary>
+        internal static string Context_ChannelMenu {
+            get {
+                return ResourceManager.GetString("Context_ChannelMenu", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to GM messages are always shown, regardless of a tab's channel settings..
+        /// </summary>
+        internal static string Context_ChannelAlwaysShown {
+            get {
+                return ResourceManager.GetString("Context_ChannelAlwaysShown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ExtraChat linkshells are configured under Settings > Tabs > ExtraChat channels..
+        /// </summary>
+        internal static string Context_ChannelExtraChat {
+            get {
+                return ResourceManager.GetString("Context_ChannelExtraChat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to "{0}" is already not shown in this tab..
+        /// </summary>
+        internal static string Context_ChannelAlreadyHidden {
+            get {
+                return ResourceManager.GetString("Context_ChannelAlreadyHidden", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Integrations.
         /// </summary>
         internal static string Context_Integrations {

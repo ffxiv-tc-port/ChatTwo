@@ -29,6 +29,7 @@ public class Popout : Window, IChatWindow
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
     public HideState CurrentHideState { get; set; } = HideState.None;
+    public Tab? ContextTab => Tab;
 
     public Popout(Plugin plugin, Tab tab, int idx) : base($"{tab.Name}##popout")
     {

@@ -472,6 +472,32 @@ public class Tab
             }
         }
 
+        /// <summary>
+        /// Drops every message matching the predicate. Used when a channel is turned off for a
+        /// tab so the messages already on screen go away immediately, instead of having to
+        /// re-read the whole store. Must not be called while a GetReadOnly lock is held -
+        /// LockSlim is not reentrant.
+        /// </summary>
+        public void RemoveWhere(Predicate<Message> predicate)
+        {
+            LockSlim.Wait(-1);
+            try
+            {
+                for (var i = Messages.Count - 1; i >= 0; i--)
+                {
+                    if (!predicate(Messages[i]))
+                        continue;
+
+                    TrackedMessageIds.Remove(Messages[i].Id);
+                    Messages.RemoveAt(i);
+                }
+            }
+            finally
+            {
+                LockSlim.Release();
+            }
+        }
+
         private void SortLocked()
         {
             Messages.Sort((a, b) => a.Date.CompareTo(b.Date));

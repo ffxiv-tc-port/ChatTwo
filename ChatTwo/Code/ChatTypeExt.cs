@@ -88,6 +88,65 @@ public static class ChatTypeExt
         // UI.
     ];
 
+    // TC: 頻道要顯示給使用者看的名字。優先用遊戲自己的(繁中)過濾器名稱,但只在該 LogKind
+    // 剛好只對應到一筆 LogFilter 時才用 —— 遊戲把「造成傷害」「附加強化狀態」這類依來源
+    // 拆成 22 筆(自己造成傷害/隊友造成傷害/他人造成傷害...),而 ChatTwo 的一個 ChatType
+    // 涵蓋所有來源(來源/對象遮罩是 SelectedChannels 的另一個維度),取第一筆會得到
+    // 「自己造成傷害」這種以偏概全、實際上是錯的標籤。這種情形改用 Language.ChatType_*。
+    private static Dictionary<ChatType, string>? GameNameCache;
+
+    private static Dictionary<ChatType, string> GameNames()
+    {
+        if (GameNameCache != null)
+            return GameNameCache;
+
+        var counts = new Dictionary<byte, int>();
+        var names = new Dictionary<byte, string>();
+        try
+        {
+            foreach (var row in Sheets.LogFilterSheet)
+            {
+                var rowName = row.Name.ToString();
+                if (string.IsNullOrWhiteSpace(rowName) || rowName == "None")
+                    continue;
+
+                var rowKind = (byte) row.LogKind;
+                counts[rowKind] = counts.GetValueOrDefault(rowKind) + 1;
+                names.TryAdd(rowKind, rowName);
+            }
+        }
+        catch (Exception ex)
+        {
+            // This is reached from the ImGui draw path, where an escaping exception kills the
+            // plugin's whole UI until the game restarts. Fall back to the plugin's own names.
+            Plugin.Log.Warning(ex, "Could not read LogFilter, falling back to plugin channel names");
+            counts.Clear();
+            names.Clear();
+        }
+
+        var cache = new Dictionary<ChatType, string>();
+        foreach (var type in Enum.GetValues<ChatType>())
+        {
+            // ExtraChat's synthetic types (1001+) would truncate into a real LogKind.
+            if ((ushort) type > byte.MaxValue)
+                continue;
+
+            var kind = (byte) type;
+            if (counts.GetValueOrDefault(kind) == 1 && names.TryGetValue(kind, out var name))
+                cache[type] = name;
+        }
+
+        GameNameCache = cache;
+        return cache;
+    }
+
+    /// <summary>
+    /// The name to show a user for a channel: the game's own localised filter name when that name
+    /// is unambiguous, otherwise the plugin's translated name. Never throws.
+    /// </summary>
+    public static string DisplayName(this ChatType type)
+        => GameNames().TryGetValue(type, out var name) ? name : type.Name();
+
     public static string Name(this ChatType type)
     {
         return type switch

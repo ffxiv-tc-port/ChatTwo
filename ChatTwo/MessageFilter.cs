@@ -172,17 +172,70 @@ public static class MessageFilterSet
     }
 
     /// <summary>
-    /// The message's visible text, with sender and icons left out. Deliberately not cached on
-    /// Message: Content is rewritten in place by the &lt;item&gt;/&lt;flag&gt; expansion, so a
-    /// cache would be stale for exactly the messages that contain links.
+    /// The whole visible line - sender first, then content - with icon chunks left out.
     /// </summary>
-    private static string TextOf(Message message)
+    /// <remarks>
+    /// The sender chunks already carry the game's own separator (LogKind.Format's text around
+    /// the name), so this is literally what the line reads as: "Tataru Taru : text" for NPC
+    /// dialogue, "Tataru Taru：text" for say, "Tataru Taru &gt;&gt; text" for a tell. That means a
+    /// rule can be anchored at a speaker with ^, which is the only way to mute one retainer or
+    /// one player without also muting every message that happens to contain their name.
+    /// <para>
+    /// Including the sender cannot make a plain-substring rule match more than it used to for
+    /// the messages people actually write those rules against: system lines ("You catch a fish")
+    /// have no sender at all, so their text is unchanged.
+    /// </para>
+    /// <para>
+    /// Deliberately not cached on Message: Content is replaced wholesale by the
+    /// &lt;item&gt;/&lt;flag&gt; expansion, so a cache would be stale for exactly the messages
+    /// that contain links. Sender is assigned once in the constructor and never reassigned, and
+    /// Content is swapped by reference rather than mutated in place, so walking either of them
+    /// from another thread cannot throw.
+    /// </para>
+    /// </remarks>
+    public static string TextOf(Message message)
     {
         var builder = new StringBuilder();
+        foreach (var chunk in message.Sender)
+            if (chunk is TextChunk text)
+                builder.Append(text.Content);
+
         foreach (var chunk in message.Content)
             if (chunk is TextChunk text)
                 builder.Append(text.Content);
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// The last message that arrived with a sender, so the settings window can show a real line
+    /// instead of describing one.
+    /// </summary>
+    /// <remarks>
+    /// The separator is not ours: it comes from the game's LogKind sheet and differs per channel
+    /// and per client language (say is a fullwidth colon, NPC dialogue is space-colon-space).
+    /// Prose cannot tell a user which one to type, and getting it wrong produces a rule that
+    /// silently never matches - so the editor shows the genuine article instead.
+    /// <para>
+    /// Written on the message thread, read on the draw path, with no lock: a reference
+    /// assignment is atomic, so a reader sees one whole Message or another, never a torn one.
+    /// Holding one message alive costs nothing and the value survives the tab pruning it.
+    /// </para>
+    /// </remarks>
+    private static Message? Sample;
+
+    public static void RememberSample(Message message) => Sample = message;
+
+    public static void ForgetSample() => Sample = null;
+
+    /// <summary>The sample line, or null when no message with a sender has arrived yet.</summary>
+    public static string? SampleText()
+    {
+        var sample = Sample; // read the field once; it may be replaced concurrently
+        if (sample == null)
+            return null;
+
+        var text = TextOf(sample);
+        return text.Length == 0 ? null : text;
     }
 }

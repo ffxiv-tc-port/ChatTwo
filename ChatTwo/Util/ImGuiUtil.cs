@@ -566,6 +566,20 @@ public static class ImGuiUtil
             return;
 
         HelpText(description);
+        HelpText(Language.Options_MessageFilters_MatchTarget);
+
+        // A real line, not a description of one. The separator between name and text comes from
+        // the game's LogKind sheet and differs per channel and per client language, so telling
+        // someone "the sender is included" still leaves them guessing which character to type -
+        // and guessing wrong produces a rule that silently never matches.
+        var sample = MessageFilterSet.SampleText();
+        HelpText(sample == null
+            ? Language.Options_MessageFilters_SampleNone
+            : string.Format(Language.Options_MessageFilters_Sample, Ellipsize(sample, SampleLimit)));
+
+        if (sample is { Length: > SampleLimit } && ImGui.IsItemHovered())
+            Tooltip(sample);
+
         ImGui.Spacing();
 
         var remove = -1;
@@ -602,6 +616,27 @@ public static class ImGuiUtil
 
         if (ImGui.Button(Language.Options_MessageFilters_Add))
             filters.Add(new MessageFilter());
+    }
+
+    /// <summary>How much of the sample line is shown inline; the rest goes in a tooltip.</summary>
+    private const int SampleLimit = 60;
+
+    /// <summary>
+    /// Shortens a string without ever splitting a surrogate pair. A lone surrogate would reach
+    /// ImGui as invalid UTF-8, and this runs on the draw path where that is not a cosmetic
+    /// problem. Chat lines have no length limit worth relying on - a shout or a novice network
+    /// message would otherwise wrap across half the settings window.
+    /// </summary>
+    private static string Ellipsize(string text, int max)
+    {
+        if (text.Length <= max)
+            return text;
+
+        var cut = max;
+        if (char.IsHighSurrogate(text[cut - 1]))
+            cut -= 1;
+
+        return string.Concat(text.AsSpan(0, cut), "…");
     }
 
     public static void ChannelSelector(string headerText, Dictionary<ChatType, (ChatSource Source, ChatSource Target)> chatCodes)

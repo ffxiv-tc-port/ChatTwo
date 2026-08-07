@@ -4343,5 +4343,32 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_MessageFilters_Backtracking", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Rules are matched against the whole line, sender included. The separator the game puts between a name and the message is part of it, so a rule can be anchored to one speaker with ^ rather than matching that name wherever it appears..
+        /// </summary>
+        internal static string Options_MessageFilters_MatchTarget {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_MatchTarget", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A line that just arrived reads like this to a rule: {0}.
+        /// </summary>
+        internal static string Options_MessageFilters_Sample {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Sample", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No message with a sender has arrived yet, so there is no sample to show..
+        /// </summary>
+        internal static string Options_MessageFilters_SampleNone {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_SampleNone", resourceCulture);
+            }
+        }
     }
 }

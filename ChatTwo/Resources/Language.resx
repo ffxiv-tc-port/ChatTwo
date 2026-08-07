@@ -1550,4 +1550,13 @@ Your old database can still be recovered, please contact the plugin author for h
       <data name="Options_MessageFilters_Backtracking">
           <value>This pattern uses lookaround or a backreference, so it runs on the backtracking engine with a 100 ms limit per message instead of being linear by construction. Patterns that hit the limit are ignored for that message and logged once.</value>
       </data>
+      <data name="Options_MessageFilters_MatchTarget">
+          <value>Rules are matched against the whole line, sender included. The separator the game puts between a name and the message is part of it, so a rule can be anchored to one speaker with ^ rather than matching that name wherever it appears.</value>
+      </data>
+      <data name="Options_MessageFilters_Sample">
+          <value>A line that just arrived reads like this to a rule: {0}</value>
+      </data>
+      <data name="Options_MessageFilters_SampleNone">
+          <value>No message with a sender has arrived yet, so there is no sample to show.</value>
+      </data>
 </root>

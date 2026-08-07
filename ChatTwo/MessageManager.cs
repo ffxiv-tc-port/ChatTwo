@@ -129,6 +129,11 @@ public class MessageManager : IAsyncDisposable
     private void Logout(int _, int __)
     {
         LastContentId = 0;
+
+        // Tabs already drop the previous character's messages on logout unless the user opted
+        // into AllSenderMessages, so the settings window must not be the one place a line from
+        // the character they just left keeps showing up.
+        MessageFilterSet.ForgetSample();
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -300,6 +305,12 @@ public class MessageManager : IAsyncDisposable
 
         var contentChunks = ChunkUtil.ToChunks(pendingMessage.Content, ChunkSource.Content, chatCode.Type).ToList();
         var message = new Message(CurrentContentId, pendingMessage.ContentId, pendingMessage.AccountId, chatCode, senderChunks, contentChunks, pendingMessage.Sender, pendingMessage.Content);
+
+        // Keep the newest line that actually has a speaker around for the filter editor to show.
+        // Only messages with a sender are useful there - the point of the sample is to display
+        // the separator the game puts between name and text, which the others do not have.
+        if (senderChunks.Count > 0)
+            MessageFilterSet.RememberSample(message);
 
         var isBattle = message.Code.IsBattle();
         var isCraftOrGather = message.Code.IsCraftOrGather();

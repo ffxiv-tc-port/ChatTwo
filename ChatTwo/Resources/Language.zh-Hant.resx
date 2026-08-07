@@ -1551,4 +1551,13 @@
       <data name="Options_MessageFilters_Backtracking">
           <value>這條用到了環顧或反向參照，所以走的是會回溯的引擎，每則訊息上限 100 毫秒，而不是先天就跑不久。超過上限的那則訊息會直接放行，並在記錄檔留一筆。</value>
       </data>
+      <data name="Options_MessageFilters_MatchTarget">
+          <value>規則比對的是整行，包含發話者。遊戲放在名字與內容之間的分隔符也算在內，所以可以用 ^ 把規則綁在特定發話者身上，而不是那個名字出現在哪裡都擋。</value>
+      </data>
+      <data name="Options_MessageFilters_Sample">
+          <value>剛收到的一則訊息，在規則眼中長這樣：{0}</value>
+      </data>
+      <data name="Options_MessageFilters_SampleNone">
+          <value>目前還沒收到帶發話者的訊息，所以沒有範例可以顯示。</value>
+      </data>
 </root>

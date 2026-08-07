@@ -176,7 +176,11 @@ public class MessageManager : IAsyncDisposable
         if (!Plugin.Config.FilterIncludePreviousSessions)
             since = Plugin.GameStarted;
 
-        using var messages = Store.GetMostRecentMessages(CurrentContentId, since);
+        // Receiver is the character a message was logged for. Passing null drops the WHERE
+        // clause entirely, which is exactly what "show every character's messages" means. Note
+        // the query's 10k row budget is then shared between all characters, not per character.
+        var receiver = Plugin.Config.CrossCharacterMessages ? (ulong?) null : CurrentContentId;
+        using var messages = Store.GetMostRecentMessages(receiver, since);
 
         // We store the pending messages to be added to the chat log in a
         // temporary list, and apply them all at once after filtering.

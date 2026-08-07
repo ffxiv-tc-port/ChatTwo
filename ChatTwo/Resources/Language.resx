@@ -1511,4 +1511,10 @@ Your old database can still be recovered, please contact the plugin author for h
     <data name="Options_DatabaseGatherCraftMessages_Description" xml:space="preserve">
         <value>If gathering and crafting messages are saved to the database, the size of the database will grow much faster, and there will be a noticeable freeze when saving settings. It is recommended to leave this disabled.</value>
     </data>
+      <data name="Options_CrossCharacterMessages_Name">
+          <value>Show messages from all characters</value>
+      </data>
+      <data name="Options_CrossCharacterMessages_Description">
+          <value>Off (default): each character only sees its own messages, and every tab is cleared when you log out. On: tabs keep every character's messages, including tells that were sent to your other characters, and are not cleared on logout. The 10,000 message load limit is then shared between all characters instead of applying to each one separately.</value>
+      </data>
 </root>

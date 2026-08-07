@@ -1512,4 +1512,10 @@
   <data name="Options_DatabaseGatherCraftMessages_Description" xml:space="preserve">
         <value>若將採集與製作訊息儲存到資料庫，資料庫大小會成長得快很多，而且儲存設定時會出現明顯的卡頓。建議保持停用。</value>
     </data>
+      <data name="Options_CrossCharacterMessages_Name">
+          <value>顯示所有角色的訊息</value>
+      </data>
+      <data name="Options_CrossCharacterMessages_Description">
+          <value>關閉（預設）：每個角色只看得到自己的訊息，登出時會清空所有標籤頁。開啟：標籤頁會保留所有角色的訊息，包含寄給你其他角色的悄悄話，登出也不清空。載入上限 10000 則會變成所有角色共用，而不是每個角色各自 10000 則。</value>
+      </data>
 </root>

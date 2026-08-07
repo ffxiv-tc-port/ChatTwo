@@ -86,6 +86,7 @@ public class Configuration : IPluginConfiguration
     public bool DatabaseGatherCraftMessages;
     public bool LoadPreviousSession;
     public bool FilterIncludePreviousSessions;
+    public bool CrossCharacterMessages;
     public bool SortAutoTranslate;
     public bool CollapseDuplicateMessages;
     public bool CollapseKeepUniqueLinks;
@@ -199,6 +200,7 @@ public class Configuration : IPluginConfiguration
         DatabaseGatherCraftMessages = other.DatabaseGatherCraftMessages;
         LoadPreviousSession = other.LoadPreviousSession;
         FilterIncludePreviousSessions = other.FilterIncludePreviousSessions;
+        CrossCharacterMessages = other.CrossCharacterMessages;
         SortAutoTranslate = other.SortAutoTranslate;
         CollapseDuplicateMessages = other.CollapseDuplicateMessages;
         CollapseKeepUniqueLinks = other.CollapseKeepUniqueLinks;

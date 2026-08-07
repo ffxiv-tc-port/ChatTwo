@@ -4226,5 +4226,23 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Webinterface_UsageNotice", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show messages from all characters.
+        /// </summary>
+        internal static string Options_CrossCharacterMessages_Name {
+            get {
+                return ResourceManager.GetString("Options_CrossCharacterMessages_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Off (default): each character only sees its own messages, and every tab is cleared when you log out. On: tabs keep every character's messages, including tells that were sent to your other characters, and are not cleared on logout. The 10,000 message load limit is then shared between all characters instead of applying to each one separately..
+        /// </summary>
+        internal static string Options_CrossCharacterMessages_Description {
+            get {
+                return ResourceManager.GetString("Options_CrossCharacterMessages_Description", resourceCulture);
+            }
+        }
     }
 }

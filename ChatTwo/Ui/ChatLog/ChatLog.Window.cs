@@ -96,6 +96,12 @@ public partial class ChatLog : Window, IChatWindow
 
     private void Logout(int _, int __)
     {
+        // Tabs are wiped on logout so the next character does not inherit this one's messages -
+        // FilterAllTabs only ever adds (AddSortPrune dedupes by Message.Id), so nothing else
+        // would take them back out. That isolation is precisely what this option turns off.
+        if (Plugin.Config.CrossCharacterMessages)
+            return;
+
         Plugin.MessageManager.ClearAllTabs();
     }
 

@@ -84,6 +84,60 @@ public sealed unsafe class Chat : IDisposable
         ContextMenuTellInForayHook?.Dispose();
     }
 
+    // Shared throttle state for the resolution guards below. Everything that logs through here runs
+    // on the main thread (game detours plus ImGui draw callbacks), so no locking is needed. A
+    // module- or signature-resolution failure is permanent for the rest of the session, so an
+    // unthrottled Error would repeat on every channel change and every send for as long as the game
+    // is running. Error level is deliberate: users run LogLevel 2, so Debug/Verbose would never
+    // reach them, and this is exactly the sort of thing we want reported back.
+    private static readonly TimeSpan LogThrottleInterval = TimeSpan.FromSeconds(30);
+    private readonly Dictionary<string, (DateTime Last, int Suppressed)> ThrottledLogs = new();
+
+    private void LogErrorThrottled(string key, Exception ex, string message)
+    {
+        var now = DateTime.UtcNow;
+        ThrottledLogs.TryGetValue(key, out var state);
+        if (state.Last != default && now - state.Last < LogThrottleInterval)
+        {
+            ThrottledLogs[key] = (state.Last, state.Suppressed + 1);
+            return;
+        }
+
+        ThrottledLogs[key] = (now, 0);
+        if (state.Suppressed > 0)
+            Plugin.Log.Error(ex, $"{message} (+{state.Suppressed} suppressed since the last message)");
+        else
+            Plugin.Log.Error(ex, message);
+    }
+
+    // Resolves RaptureShellModule while guarding BOTH of its failure modes, returning null if
+    // either one fires.
+    //
+    // FFXIVClientStructs has two kinds of Instance() and they fail in opposite ways. The ones the
+    // [StaticAddress] generator emits throw InvalidOperationException (via
+    // ThrowHelper.ThrowNullAddress) when their signature does not resolve. The hand-written chained
+    // ones simply return null. RaptureShellModule.Instance() is the chained kind - it is literally
+    // `uiModule == null ? null : uiModule->GetRaptureShellModule()` - which means it stacks BOTH
+    // modes onto a single expression: the null return is its own, and the throw comes from
+    // Framework.Instance() one level further down inside UIModule.Instance().
+    //
+    // Handling only one of them is fake protection. Dereferencing the null return is an
+    // AccessViolationException, a corrupted-state exception that try/catch cannot intercept in .NET
+    // Core at all; and a throw that escapes a detour back into native code terminates the process.
+    // Callers must therefore both use this instead of Instance() and null-check what comes back.
+    private RaptureShellModule* GetRaptureShellModuleOrNull(string logKey, string logMessage)
+    {
+        try
+        {
+            return RaptureShellModule.Instance();
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled(logKey, ex, logMessage);
+            return null;
+        }
+    }
+
     public static string? GetLinkshellName(uint idx)
     {
         var utf = InfoProxyChat.Instance()->GetLinkShellName(idx);
@@ -240,26 +294,13 @@ public sealed unsafe class Chat : IDisposable
         if (agent == null)
             return ret;
 
-        // RaptureShellModule.Instance() has two distinct failure modes and only one of them is
-        // catchable. Framework.Instance() is a [StaticAddress] stub that calls ThrowNullAddress ->
-        // InvalidOperationException when its signature fails to resolve; this detour is invoked from
-        // native code, so an exception escaping here terminates the process. The other mode is a
-        // plain null return (UIModule not built yet, or torn down - Instance() itself null-checks
-        // UIModule), and ->ChatType on that is an AccessViolationException, which try/catch cannot
-        // intercept in .NET Core. Guard both. Original was already called above, so the game's own
-        // behaviour is unaffected either way; we only skip updating our CurrentChannel bookkeeping,
-        // exactly like the agent == null and name == null paths below.
-        RaptureShellModule* shellModule;
-        try
-        {
-            shellModule = RaptureShellModule.Instance();
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.Error(ex, "Could not resolve RaptureShellModule, leaving current channel unchanged");
-            return ret;
-        }
-
+        // Original was already called above, so everything below is purely ChatTwo's own
+        // bookkeeping - whatever we skip here, the game has already done its own work and behaves
+        // normally. The degradation for every guard in this method is therefore identical: the
+        // recorded channel, its label and the tell target stay at their previous values until the
+        // next channel change, so ChatTwo's input line can show a stale channel name. Vanilla chat
+        // is unaffected.
+        var shellModule = GetRaptureShellModuleOrNull("ChangeChannelName/shellModule", "Could not resolve RaptureShellModule; leaving the recorded channel unchanged");
         if (shellModule == null)
             return ret;
 
@@ -267,32 +308,62 @@ public sealed unsafe class Chat : IDisposable
         if (channel is 17 or 18)
             channel = (uint) InputChannel.Tell;
 
-        var name = SeString.Parse(agent->ChannelLabel);
-        if (name.Payloads.Count == 0)
-            name = null;
-
-        if (name == null)
+        // ChannelLabel is an inline Utf8String, and the implicit Utf8String -> ReadOnlySpan<byte>
+        // conversion is `new(StringPtr, Length)` with Length derived from BufUsed. If the agent is
+        // half torn down, StringPtr can be null while Length is still non-zero, and SeString.Parse
+        // then scans from address 0 looking for a terminator - an AccessViolationException, which
+        // try/catch does not intercept. This pointer check is a separate concern from the try below
+        // and neither substitutes for the other. Behaviour in the benign case is unchanged: a null
+        // StringPtr with Length 0 used to parse to an empty SeString, which the Payloads.Count
+        // check already turned into the same early return.
+        if (!agent->ChannelLabel.StringPtr.HasValue)
             return ret;
 
-        var nameChunks = ChunkUtil.ToChunks(name, ChunkSource.None, null).ToList();
-        if (nameChunks.Count > 0 && nameChunks[0] is TextChunk text)
-            text.Content = text.Content.TrimStart('\uE01E').TrimStart();
-
-        string? playerName = null;
-        ushort worldId = 0;
-        if (channel == (uint) InputChannel.Tell)
+        // fail-closed. Three managed throw sources live in this block, all of them driven by data
+        // the game hands us rather than by anything we control:
+        //   - SeString.Parse walks the payload stream with a BinaryReader over an
+        //     UnmanagedMemoryStream; a truncated or malformed chunk header throws
+        //     EndOfStreamException.
+        //   - ChunkUtil.ToChunks resolves UIForeground/UIGlow colour keys through
+        //     RowRef<UIColor>.Value, which throws when the row is missing from the sheet - a real
+        //     possibility on TC, whose sheets are not the ones these payloads were authored against.
+        //   - Plugin.CurrentTab reads the static Plugin.Config, and Config.Tabs is a
+        //     JSON-deserialised list, so an element can be null. (The property itself never returns
+        //     null: it falls back to `new Tab()` when LastTab is out of range.)
+        // This detour is called from native code, so any of those escaping terminates the process.
+        try
         {
-            playerName = SeString.Parse(agent->TellPlayerName).TextValue;
-            worldId = agent->TellWorldId;
-            Plugin.Log.Debug($"Detected tell target '{playerName}'@{worldId}");
+            var name = SeString.Parse(agent->ChannelLabel);
+            if (name.Payloads.Count == 0)
+                return ret;
+
+            var nameChunks = ChunkUtil.ToChunks(name, ChunkSource.None, null).ToList();
+            if (nameChunks.Count > 0 && nameChunks[0] is TextChunk text)
+                text.Content = text.Content.TrimStart('\uE01E').TrimStart();
+
+            string? playerName = null;
+            ushort worldId = 0;
+            if (channel == (uint) InputChannel.Tell)
+            {
+                // Same null-pointer reasoning as ChannelLabel above. string.Empty rather than null
+                // preserves the old behaviour: a zero-length TellPlayerName parsed to an empty
+                // SeString whose TextValue is "", which still produced a TellTarget.
+                playerName = agent->TellPlayerName.StringPtr.HasValue ? SeString.Parse(agent->TellPlayerName).TextValue : string.Empty;
+                worldId = agent->TellWorldId;
+                Plugin.Log.Debug($"Detected tell target '{playerName}'@{worldId}");
+            }
+
+            Plugin.CurrentTab.CurrentChannel = new UsedChannel
+            {
+                Channel = (InputChannel) channel,
+                Name = nameChunks,
+                TellTarget = playerName != null ? new TellTarget(playerName, worldId, 0, 0) : null
+            };
         }
-
-        Plugin.CurrentTab.CurrentChannel = new UsedChannel
+        catch (Exception ex)
         {
-            Channel = (InputChannel) channel,
-            Name = nameChunks,
-            TellTarget = playerName != null ? new TellTarget(playerName, worldId, 0, 0) : null
-        };
+            LogErrorThrottled("ChangeChannelName/parse", ex, "Could not parse the chat channel label; leaving the recorded channel unchanged");
+        }
 
         return ret;
     }
@@ -384,18 +455,38 @@ public sealed unsafe class Chat : IDisposable
         return false;
     }
 
+    // The info-proxy Instance() getters are source-generated as
+    // `infoModule == null ? null : (T*)infoModule->GetInfoProxyById(id)`, i.e. the chained kind that
+    // returns null rather than throwing, and GetInfoProxyById can itself return null for a proxy
+    // that is not registered. Dereferencing that is an AccessViolationException, which try/catch
+    // cannot intercept. This matters more than it looks: IsChannelOrExistingLinkshell sits on the
+    // native-reachable path ReplyInSelectedChatModeDetour -> SetChannelWithExtraChat -> SetChannel,
+    // and it used to be evaluated before SetChannel's own RaptureShellModule guard - so without
+    // these checks that guard could never be reached. Degradation: an unresolvable proxy reports
+    // "this linkshell does not exist", which suppresses the channel switch for linkshell channels
+    // only; every other channel short-circuits on idx == uint.MaxValue before reaching here.
     public static bool ValidLinkshell(uint idx)
     {
         if (idx > 7)
             return false;
-        return InfoProxyLinkshell.Instance()->LinkShells[(int) idx].Id != 0;
+
+        var proxy = InfoProxyLinkshell.Instance();
+        if (proxy == null)
+            return false;
+
+        return proxy->LinkShells[(int) idx].Id != 0;
     }
 
     public static bool ValidCrossLinkshell(uint idx)
     {
         if (idx > 7)
             return false;
-        return InfoProxyCrossWorldLinkshell.Instance()->CrossWorldLinkshells[(int) idx].Name.Length > 0;
+
+        var proxy = InfoProxyCrossWorldLinkshell.Instance();
+        if (proxy == null)
+            return false;
+
+        return proxy->CrossWorldLinkshells[(int) idx].Name.Length > 0;
     }
 
     private static uint? RotateLinkshell(uint currentIndex, RotateMode rotate, Func<uint, bool> validFn)
@@ -497,8 +588,19 @@ public sealed unsafe class Chat : IDisposable
         if (idx == uint.MaxValue)
             idx = 0;
 
-        if (IsChannelOrExistingLinkshell(channel))
-            RaptureShellModule.Instance()->ChangeChatChannel(tellTarget != null ? 17 : (int)channel, idx, target, true);
+        // SetChannel is reachable from native code (ReplyInSelectedChatModeDetour ->
+        // SetChannelWithExtraChat -> here), so both failure modes are fatal: an escaping throw
+        // terminates the process from inside the detour, and a null deref is an uncatchable
+        // AccessViolationException. Resolving the shell module first is deliberate - it is the only
+        // call left in this method that can throw (Framework.Instance() deep inside the chain), and
+        // a successful resolve proves that static address is good, so the
+        // IsChannelOrExistingLinkshell call cannot then throw from the same source. Neither call has
+        // side effects, so reordering them is safe. Degradation when the guard fires: the game's own
+        // chat channel is not switched, so the next message the user sends goes to whatever channel
+        // vanilla currently has. target is still freed either way.
+        var shellModule = GetRaptureShellModuleOrNull("SetChannel/shellModule", "Could not resolve RaptureShellModule; the game's chat channel was not switched");
+        if (shellModule != null && IsChannelOrExistingLinkshell(channel))
+            shellModule->ChangeChatChannel(tellTarget != null ? 17 : (int)channel, idx, target, true);
 
         target->Dtor(true);
     }
@@ -518,7 +620,16 @@ public sealed unsafe class Chat : IDisposable
         var utfName = Utf8String.FromString(name);
         var utfWorld = Utf8String.FromString(worldName);
 
-        RaptureShellModule.Instance()->SetTellTargetInForay(utfName, utfWorld, worldId, accountId, objectId, reason, setChatType);
+        // Only reachable from PayloadHandler during draw, so an escaping throw would "merely" cost
+        // the window for that frame - but the null half is fatal no matter who calls, because
+        // dereferencing a null Instance() is an AccessViolationException. Guard both; see
+        // GetRaptureShellModuleOrNull. Degradation: the tell target is never handed to the game, so
+        // the tell is not pre-filled. Plugin.ChatLog.TellSpecial was already set to true above and
+        // stays true until the next ChatLog.Activated overwrites it, which only makes the next chat
+        // log refresh defer to vanilla once.
+        var shellModule = GetRaptureShellModuleOrNull("SetEurekaTellChannel/shellModule", "Could not resolve RaptureShellModule; the Eureka/Bozja tell target was not set");
+        if (shellModule != null)
+            shellModule->SetTellTargetInForay(utfName, utfWorld, worldId, accountId, objectId, reason, setChatType);
 
         utfName->Dtor(true);
         utfWorld->Dtor(true);
@@ -541,10 +652,33 @@ public sealed unsafe class Chat : IDisposable
     {
         var mes = Utf8String.FromSequence(message.NullTerminate());
 
-        RaptureShellModule.Instance()->ExecuteCommandInner(mes, UIModule.Instance());
-        RaptureAtkModule.Instance()->ClearFocus(); // Clear the focus of vanilla chat that was still active
+        try
+        {
+            // Three chained Instance() calls across two statements, all of the hand-written kind
+            // that returns null (RaptureShellModule/UIModule/RaptureAtkModule are each
+            // `parent == null ? null : parent->GetX()`), and the UIModule one was additionally being
+            // passed straight into a native function that dereferences it. Any of them being null is
+            // an AccessViolationException, which nothing catches. Degradation: the tell is not sent
+            // and vanilla chat may keep focus.
+            var shellModule = GetRaptureShellModuleOrNull("SendTellUsingCommandInner/shellModule", "Could not resolve RaptureShellModule; the tell was not sent");
+            if (shellModule != null)
+            {
+                var uiModule = UIModule.Instance();
+                if (uiModule != null)
+                    shellModule->ExecuteCommandInner(mes, uiModule);
+            }
 
-        mes->Dtor(true);
+            var atkModule = RaptureAtkModule.Instance();
+            if (atkModule != null)
+                atkModule->ClearFocus(); // Clear the focus of vanilla chat that was still active
+        }
+        finally
+        {
+            // try/finally, not try/catch: a throw out of UIModule/RaptureAtkModule resolution still
+            // propagates exactly as it did before (this path is managed-only, so Dalamud catches it
+            // and the window skips a frame), but the native Utf8String no longer leaks when it does.
+            mes->Dtor(true);
+        }
     }
 
     public void SendTell(TellReason reason, ulong contentId, string name, ushort homeWorld, byte[] message, string rawText)

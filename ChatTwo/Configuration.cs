@@ -89,9 +89,10 @@ public class Configuration : IPluginConfiguration
     public bool CrossCharacterMessages;
 
     /// <summary>
-    /// Global rules deciding what never gets written to the message database. Same shape as the
-    /// per-tab list on <see cref="Tab.MessageFilters"/>, but this one is irreversible: a message
-    /// that was never stored cannot come back on the next refill.
+    /// Global rules for messages that should not exist at all: a match is neither written to the
+    /// message database nor shown in any tab. Same shape as the per-tab list on
+    /// <see cref="Tab.MessageFilters"/>, but that one only hides. This one is irreversible - a
+    /// message that was never stored cannot come back on the next refill.
     /// </summary>
     public List<MessageFilter> DatabaseMessageFilters = [];
     public bool SortAutoTranslate;
@@ -287,7 +288,8 @@ public class Tab
 
     /// <summary>
     /// Rules hiding messages from this tab by their text. Purely a view filter - the messages
-    /// are still stored, so deleting a rule brings them back on the next refill.
+    /// are still stored, so deleting a rule brings them back on the next refill. The global
+    /// <see cref="Configuration.DatabaseMessageFilters"/> is the destructive counterpart.
     /// </summary>
     public List<MessageFilter> MessageFilters = [];
 

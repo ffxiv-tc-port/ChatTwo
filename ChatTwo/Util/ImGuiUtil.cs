@@ -556,7 +556,7 @@ public static class ImGuiUtil
     /// exception here takes the whole plugin UI down until the game is restarted.
     /// </para>
     /// </remarks>
-    public static void MessageFilterEditor(string id, string headerText, string description, List<MessageFilter> filters)
+    public static void MessageFilterEditor(string id, string headerText, string description, List<MessageFilter> filters, string? warning = null)
     {
         using var pushedId = ImRaii.PushId(id);
 
@@ -566,6 +566,12 @@ public static class ImGuiUtil
             return;
 
         HelpText(description);
+
+        // "This cannot be undone" is scan-on-sight information, not something to go hunting for,
+        // so it sits on the row in warning colour instead of behind a hover.
+        if (warning != null)
+            WarningText(warning);
+
         HelpText(Language.Options_MessageFilters_MatchTarget);
 
         // A real line, not a description of one. The separator between name and text comes from

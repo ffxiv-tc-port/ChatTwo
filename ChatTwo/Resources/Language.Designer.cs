@@ -4370,5 +4370,14 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_MessageFilters_SampleNone", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to There is no undo. A message discarded on arrival was never written anywhere, so deleting the rule afterwards cannot bring it back - only messages that were already in the database will reappear. If you are not sure a rule is right, try it in a tab's own list first..
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Warning {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Warning", resourceCulture);
+            }
+        }
     }
 }

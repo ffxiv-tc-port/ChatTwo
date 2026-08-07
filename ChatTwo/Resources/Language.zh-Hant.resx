@@ -1519,16 +1519,16 @@
           <value>關閉（預設）：每個角色只看得到自己的訊息，登出時會清空所有標籤頁。開啟：標籤頁會保留所有角色的訊息，包含寄給你其他角色的悄悄話，登出也不清空。載入上限 10000 則會變成所有角色共用，而不是每個角色各自 10000 則。</value>
       </data>
       <data name="Options_MessageFilters_Database_Name">
-          <value>不要儲存包含這些內容的訊息</value>
+          <value>完全丟棄包含這些內容的訊息</value>
       </data>
       <data name="Options_MessageFilters_Database_Description">
-          <value>符合這裡任一條啟用規則的訊息，不會寫進訊息資料庫。這是全域設定，對所有標籤頁都生效。而且是救不回來的：沒有存下來的訊息就是沒有了，就算開著「在填充標籤頁時包括以前的會話」，下次填充標籤頁時也不會回來。跟上面兩個選項一樣，這裡只決定「要不要存」——符合規則的訊息在這次遊戲期間仍然會顯示在標籤頁上。規則只對之後收到的訊息生效。</value>
+          <value>符合這裡任一條啟用規則的訊息會被直接丟棄：不會寫進訊息資料庫，也不會出現在任何標籤頁。這是全域設定，規則寫在這裡就對所有標籤頁生效，不必每個標籤頁各寫一次。加規則之前就已經存進資料庫的訊息也會一併隱藏起來，把規則從某個標籤頁搬到這裡才真的會有效果。</value>
       </data>
       <data name="Options_MessageFilters_Tab_Name">
           <value>隱藏包含這些內容的訊息</value>
       </data>
       <data name="Options_MessageFilters_Tab_Description">
-          <value>符合任一條啟用規則的訊息，只會從這個標籤頁隱藏起來。其他標籤頁與訊息資料庫都不受影響，所以什麼都沒有失去：把規則刪掉再儲存，訊息就會回來。悄悄話標籤頁同樣適用。</value>
+          <value>符合任一條啟用規則的訊息，只會從這個標籤頁隱藏起來。其他標籤頁與訊息資料庫都不受影響，所以什麼都沒有失去：把規則刪掉再儲存，訊息就會回來。悄悄話標籤頁同樣適用。想讓一條規則對所有標籤頁生效、而且連存都不要存，就把它搬到「資料庫」頁的「完全丟棄包含這些內容的訊息」。</value>
       </data>
       <data name="Options_MessageFilters_Add">
           <value>新增規則</value>
@@ -1559,5 +1559,8 @@
       </data>
       <data name="Options_MessageFilters_SampleNone">
           <value>目前還沒收到帶發話者的訊息，所以沒有範例可以顯示。</value>
+      </data>
+      <data name="Options_MessageFilters_Database_Warning">
+          <value>這個動作沒有辦法還原。訊息一到就被丟棄，等於從來沒有存在任何地方，之後把規則刪掉也救不回來——只有已經在資料庫裡的訊息會重新出現。還不確定規則對不對，先在某個標籤頁自己的清單裡試。</value>
       </data>
 </root>

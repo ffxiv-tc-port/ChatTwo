@@ -191,8 +191,20 @@ public class MessageManager : IAsyncDisposable
         // temporary list, and apply them all at once after filtering.
         var pendingTabs = Plugin.Config.Tabs.Select(tab => (tab, new List<Message>())).ToList();
         foreach (var message in messages)
+        {
+            // The same global rules ProcessMessage applies. Messages dropped on arrival were never
+            // stored, so this looks redundant - it is not. A rule added today says nothing about
+            // what was written yesterday, and the intended workflow is to try a rule on one tab and
+            // then promote it here; without this the promoted rule would appear to do nothing until
+            // the old rows aged out of the query window.
+            //
+            // Evaluated once per message rather than inside Tab.Matches, which runs once per tab.
+            if (MessageFilterSet.Blocks(Plugin.Config.DatabaseMessageFilters, message))
+                continue;
+
             foreach (var (_, pendingMessages) in pendingTabs.Where(ptab => ptab.Item1.Matches(message)))
                 pendingMessages.Add(message);
+        }
 
         // Apply the messages to the chat log in one go.
         foreach (var (tab, pendingMessages) in pendingTabs)
@@ -312,14 +324,24 @@ public class MessageManager : IAsyncDisposable
         if (senderChunks.Count > 0)
             MessageFilterSet.RememberSample(message);
 
+        // The global text rules drop the message outright: it is neither stored nor shown. They
+        // are not the same kind of switch as DatabaseBattleMessages below - that one is a coarse
+        // "this whole category is not worth the disk space", while a rule here names one specific
+        // thing the user never wants to see. Keeping the two layers independent meant every rule
+        // had to be written twice (once here, once per tab) and the messages kept scrolling past
+        // until the next refill anyway, which is nobody's idea of "filtered".
+        //
+        // Deliberately after RememberSample: the filter editor's sample line is the only place a
+        // user can see the separator the game puts between sender and text, and it would be worth
+        // little if the messages they are writing rules against were the ones excluded from it.
+        if (MessageFilterSet.Blocks(Plugin.Config.DatabaseMessageFilters, message))
+            return;
+
         var isBattle = message.Code.IsBattle();
         var isCraftOrGather = message.Code.IsCraftOrGather();
         var storeByChannel = (!isBattle && !isCraftOrGather) || (isBattle && Plugin.Config.DatabaseBattleMessages) || (isCraftOrGather && Plugin.Config.DatabaseGatherCraftMessages);
 
-        // The text rules gate storage only, exactly like DatabaseBattleMessages above: the message
-        // still reaches the tabs for this session, it just will not be there after a refill. That
-        // asymmetry is deliberate - it is the established meaning of the options on this screen.
-        if (storeByChannel && !MessageFilterSet.Blocks(Plugin.Config.DatabaseMessageFilters, message))
+        if (storeByChannel)
             Store.UpsertMessage(message);
 
         var currentTabId = Plugin.CurrentTab.Identifier;

@@ -1518,16 +1518,16 @@ Your old database can still be recovered, please contact the plugin author for h
           <value>Off (default): each character only sees its own messages, and every tab is cleared when you log out. On: tabs keep every character's messages, including tells that were sent to your other characters, and are not cleared on logout. The 10,000 message load limit is then shared between all characters instead of applying to each one separately.</value>
       </data>
       <data name="Options_MessageFilters_Database_Name">
-          <value>Never save messages containing</value>
+          <value>Discard messages containing</value>
       </data>
       <data name="Options_MessageFilters_Database_Description">
-          <value>Messages matching any active rule here are never written to the message database. This is global and applies to every tab. It cannot be undone: a message that was never saved is gone, so it will not come back the next time tabs are populated, even with "Include previous sessions when populating tabs" enabled. Like the two options above, this only decides what gets stored - a matching message still shows up in your tabs for the rest of this session. Rules only apply to messages received from now on.</value>
+          <value>Messages matching any active rule here are discarded outright: they are not written to the message database, and they do not appear in any tab. This is global, so a rule written here does not have to be repeated on every tab. Messages that were already stored before you added the rule are hidden as well, which is what makes moving a rule here from a tab's own list actually take effect.</value>
       </data>
       <data name="Options_MessageFilters_Tab_Name">
           <value>Hide messages containing</value>
       </data>
       <data name="Options_MessageFilters_Tab_Description">
-          <value>Messages matching any active rule are hidden from this tab only. Other tabs and the message database are not affected, so nothing is lost: delete a rule and save, and the messages come back. This applies to tell tabs too.</value>
+          <value>Messages matching any active rule are hidden from this tab only. Other tabs and the message database are not affected, so nothing is lost: delete a rule and save, and the messages come back. This applies to tell tabs too. To make a rule apply everywhere and stop the messages being saved at all, move it to "Discard messages containing" on the Database page.</value>
       </data>
       <data name="Options_MessageFilters_Add">
           <value>Add rule</value>
@@ -1558,5 +1558,8 @@ Your old database can still be recovered, please contact the plugin author for h
       </data>
       <data name="Options_MessageFilters_SampleNone">
           <value>No message with a sender has arrived yet, so there is no sample to show.</value>
+      </data>
+      <data name="Options_MessageFilters_Database_Warning">
+          <value>There is no undo. A message discarded on arrival was never written anywhere, so deleting the rule afterwards cannot bring it back - only messages that were already in the database will reappear. If you are not sure a rule is right, try it in a tab's own list first.</value>
       </data>
 </root>

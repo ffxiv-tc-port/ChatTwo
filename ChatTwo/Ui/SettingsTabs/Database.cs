@@ -59,7 +59,7 @@ public sealed class Database : ISettingsTab
 
         ImGui.Spacing();
 
-        ImGuiUtil.MessageFilterEditor("db-filters", Language.Options_MessageFilters_Database_Name, Language.Options_MessageFilters_Database_Description, Mutable.DatabaseMessageFilters);
+        ImGuiUtil.MessageFilterEditor("db-filters", Language.Options_MessageFilters_Database_Name, Language.Options_MessageFilters_Database_Description, Mutable.DatabaseMessageFilters, Language.Options_MessageFilters_Database_Warning);
 
         ImGui.Spacing();
         ImGui.Separator();

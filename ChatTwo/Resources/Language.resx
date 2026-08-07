@@ -1517,4 +1517,37 @@ Your old database can still be recovered, please contact the plugin author for h
       <data name="Options_CrossCharacterMessages_Description">
           <value>Off (default): each character only sees its own messages, and every tab is cleared when you log out. On: tabs keep every character's messages, including tells that were sent to your other characters, and are not cleared on logout. The 10,000 message load limit is then shared between all characters instead of applying to each one separately.</value>
       </data>
+      <data name="Options_MessageFilters_Database_Name">
+          <value>Never save messages containing</value>
+      </data>
+      <data name="Options_MessageFilters_Database_Description">
+          <value>Messages matching any active rule here are never written to the message database. This is global and applies to every tab. It cannot be undone: a message that was never saved is gone, so it will not come back the next time tabs are populated, even with "Include previous sessions when populating tabs" enabled. Like the two options above, this only decides what gets stored - a matching message still shows up in your tabs for the rest of this session. Rules only apply to messages received from now on.</value>
+      </data>
+      <data name="Options_MessageFilters_Tab_Name">
+          <value>Hide messages containing</value>
+      </data>
+      <data name="Options_MessageFilters_Tab_Description">
+          <value>Messages matching any active rule are hidden from this tab only. Other tabs and the message database are not affected, so nothing is lost: delete a rule and save, and the messages come back. This applies to tell tabs too.</value>
+      </data>
+      <data name="Options_MessageFilters_Add">
+          <value>Add rule</value>
+      </data>
+      <data name="Options_MessageFilters_Delete">
+          <value>Delete this rule</value>
+      </data>
+      <data name="Options_MessageFilters_Enabled">
+          <value>Whether this rule is active. Untick to keep it around without it doing anything.</value>
+      </data>
+      <data name="Options_MessageFilters_Hint">
+          <value>Text to look for</value>
+      </data>
+      <data name="Options_MessageFilters_Regex">
+          <value>Regex</value>
+      </data>
+      <data name="Options_MessageFilters_Invalid">
+          <value>This pattern does not compile, so the rule does nothing: {0}</value>
+      </data>
+      <data name="Options_MessageFilters_Backtracking">
+          <value>This pattern uses lookaround or a backreference, so it runs on the backtracking engine with a 100 ms limit per message instead of being linear by construction. Patterns that hit the limit are ignored for that message and logged once.</value>
+      </data>
 </root>

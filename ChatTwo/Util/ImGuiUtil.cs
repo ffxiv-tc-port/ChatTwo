@@ -544,6 +544,66 @@ public static class ImGuiUtil
         return result != 0 || key == VirtualKey.NO_KEY;
     }
 
+    /// <summary>
+    /// Editor for a list of message text filters.
+    /// </summary>
+    /// <remarks>
+    /// Every pattern is compiled here, in the settings window, so a broken one shows the regex
+    /// compiler's own error next to the input. Without that the only symptom would be a rule
+    /// that quietly never matches, discovered days later.
+    /// <para>
+    /// This runs on the ImGui draw path, so MessageFilter.Compile catches everything - an escaping
+    /// exception here takes the whole plugin UI down until the game is restarted.
+    /// </para>
+    /// </remarks>
+    public static void MessageFilterEditor(string id, string headerText, string description, List<MessageFilter> filters)
+    {
+        using var pushedId = ImRaii.PushId(id);
+
+        // ### so the tree keeps its id (and its open/closed state) as the counter changes.
+        using var node = ImRaii.TreeNode($"{headerText} ({filters.Count})###filter-list");
+        if (!node.Success)
+            return;
+
+        HelpText(description);
+        ImGui.Spacing();
+
+        var remove = -1;
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var filter = filters[i];
+            using var rowId = ImRaii.PushId(i);
+
+            if (IconButton(FontAwesomeIcon.TrashAlt, tooltip: Language.Options_MessageFilters_Delete))
+                remove = i;
+
+            ImGui.SameLine();
+            ImGui.Checkbox("##enabled", ref filter.Enabled);
+            if (ImGui.IsItemHovered())
+                Tooltip(Language.Options_MessageFilters_Enabled);
+
+            ImGui.SameLine();
+            var regexWidth = ImGui.CalcTextSize(Language.Options_MessageFilters_Regex).X + ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.X * 2;
+            ImGui.SetNextItemWidth(Math.Max(ImGui.GetFontSize() * 6f, ImGui.GetContentRegionAvail().X - regexWidth));
+            ImGui.InputTextWithHint("##pattern", Language.Options_MessageFilters_Hint, ref filter.Pattern, 500);
+
+            ImGui.SameLine();
+            ImGui.Checkbox(Language.Options_MessageFilters_Regex, ref filter.IsRegex);
+
+            var compiled = filter.Compiled;
+            if (compiled.Error != null)
+                WarningText(string.Format(Language.Options_MessageFilters_Invalid, compiled.Error));
+            else if (compiled.Backtracking)
+                HelpText(Language.Options_MessageFilters_Backtracking);
+        }
+
+        if (remove > -1)
+            filters.RemoveAt(remove);
+
+        if (ImGui.Button(Language.Options_MessageFilters_Add))
+            filters.Add(new MessageFilter());
+    }
+
     public static void ChannelSelector(string headerText, Dictionary<ChatType, (ChatSource Source, ChatSource Target)> chatCodes)
     {
         var spacing = 3.0f * ImGuiHelpers.GlobalScale;

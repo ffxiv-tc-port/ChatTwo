@@ -87,6 +87,13 @@ public class Configuration : IPluginConfiguration
     public bool LoadPreviousSession;
     public bool FilterIncludePreviousSessions;
     public bool CrossCharacterMessages;
+
+    /// <summary>
+    /// Global rules deciding what never gets written to the message database. Same shape as the
+    /// per-tab list on <see cref="Tab.MessageFilters"/>, but this one is irreversible: a message
+    /// that was never stored cannot come back on the next refill.
+    /// </summary>
+    public List<MessageFilter> DatabaseMessageFilters = [];
     public bool SortAutoTranslate;
     public bool CollapseDuplicateMessages;
     public bool CollapseKeepUniqueLinks;
@@ -201,6 +208,7 @@ public class Configuration : IPluginConfiguration
         LoadPreviousSession = other.LoadPreviousSession;
         FilterIncludePreviousSessions = other.FilterIncludePreviousSessions;
         CrossCharacterMessages = other.CrossCharacterMessages;
+        DatabaseMessageFilters = other.DatabaseMessageFilters.Select(f => f.Clone()).ToList();
         SortAutoTranslate = other.SortAutoTranslate;
         CollapseDuplicateMessages = other.CollapseDuplicateMessages;
         CollapseKeepUniqueLinks = other.CollapseKeepUniqueLinks;
@@ -277,6 +285,12 @@ public class Tab
     public bool ExtraChatAll;
     public HashSet<Guid> ExtraChatChannels = [];
 
+    /// <summary>
+    /// Rules hiding messages from this tab by their text. Purely a view filter - the messages
+    /// are still stored, so deleting a rule brings them back on the next refill.
+    /// </summary>
+    public List<MessageFilter> MessageFilters = [];
+
     public UnreadMode UnreadMode = UnreadMode.Unseen;
     public bool UnhideOnActivity;
     public bool DisplayTimestamp = true;
@@ -313,6 +327,10 @@ public class Tab
 
     public bool Matches(Message message)
     {
+        // Text rules run first so they also cover tell tabs, which take an early return below.
+        if (MessageFilterSet.Blocks(MessageFilters, message))
+            return false;
+
         if (Channel == InputChannel.Tell && TellTarget.IsSet())
         {
             if (!message.Code.IsPlayerMessage())
@@ -369,6 +387,7 @@ public class Tab
             SelectedChannels = SelectedChannels.ToDictionary(pair => pair.Key, pair => pair.Value),
             ExtraChatAll = ExtraChatAll,
             ExtraChatChannels = ExtraChatChannels.ToHashSet(),
+            MessageFilters = MessageFilters.Select(f => f.Clone()).ToList(),
             UnreadMode = UnreadMode,
             UnhideOnActivity = UnhideOnActivity,
             Unread = Unread,

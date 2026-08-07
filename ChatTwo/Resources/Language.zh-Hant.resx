@@ -1518,4 +1518,37 @@
       <data name="Options_CrossCharacterMessages_Description">
           <value>關閉（預設）：每個角色只看得到自己的訊息，登出時會清空所有標籤頁。開啟：標籤頁會保留所有角色的訊息，包含寄給你其他角色的悄悄話，登出也不清空。載入上限 10000 則會變成所有角色共用，而不是每個角色各自 10000 則。</value>
       </data>
+      <data name="Options_MessageFilters_Database_Name">
+          <value>不要儲存包含這些內容的訊息</value>
+      </data>
+      <data name="Options_MessageFilters_Database_Description">
+          <value>符合這裡任一條啟用規則的訊息，不會寫進訊息資料庫。這是全域設定，對所有標籤頁都生效。而且是救不回來的：沒有存下來的訊息就是沒有了，就算開著「在填充標籤頁時包括以前的會話」，下次填充標籤頁時也不會回來。跟上面兩個選項一樣，這裡只決定「要不要存」——符合規則的訊息在這次遊戲期間仍然會顯示在標籤頁上。規則只對之後收到的訊息生效。</value>
+      </data>
+      <data name="Options_MessageFilters_Tab_Name">
+          <value>隱藏包含這些內容的訊息</value>
+      </data>
+      <data name="Options_MessageFilters_Tab_Description">
+          <value>符合任一條啟用規則的訊息，只會從這個標籤頁隱藏起來。其他標籤頁與訊息資料庫都不受影響，所以什麼都沒有失去：把規則刪掉再儲存，訊息就會回來。悄悄話標籤頁同樣適用。</value>
+      </data>
+      <data name="Options_MessageFilters_Add">
+          <value>新增規則</value>
+      </data>
+      <data name="Options_MessageFilters_Delete">
+          <value>刪除這條規則</value>
+      </data>
+      <data name="Options_MessageFilters_Enabled">
+          <value>這條規則要不要生效。取消勾選就是留著但暫時不用。</value>
+      </data>
+      <data name="Options_MessageFilters_Hint">
+          <value>要比對的文字</value>
+      </data>
+      <data name="Options_MessageFilters_Regex">
+          <value>正規表示式</value>
+      </data>
+      <data name="Options_MessageFilters_Invalid">
+          <value>這條表示式編譯不過，所以整條規則不會生效：{0}</value>
+      </data>
+      <data name="Options_MessageFilters_Backtracking">
+          <value>這條用到了環顧或反向參照，所以走的是會回溯的引擎，每則訊息上限 100 毫秒，而不是先天就跑不久。超過上限的那則訊息會直接放行，並在記錄檔留一筆。</value>
+      </data>
 </root>

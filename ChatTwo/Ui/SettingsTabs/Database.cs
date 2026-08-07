@@ -58,6 +58,10 @@ public sealed class Database : ISettingsTab
         ImGuiUtil.OptionCheckbox(ref Mutable.CrossCharacterMessages, Language.Options_CrossCharacterMessages_Name, Language.Options_CrossCharacterMessages_Description);
 
         ImGui.Spacing();
+
+        ImGuiUtil.MessageFilterEditor("db-filters", Language.Options_MessageFilters_Database_Name, Language.Options_MessageFilters_Database_Description, Mutable.DatabaseMessageFilters);
+
+        ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
 

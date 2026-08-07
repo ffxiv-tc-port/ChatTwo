@@ -4244,5 +4244,104 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_CrossCharacterMessages_Description", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Never save messages containing.
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Name {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages matching any active rule here are never written to the message database. This is global and applies to every tab. It cannot be undone: a message that was never saved is gone, so it will not come back the next time tabs are populated, even with "Include previous sessions when populating tabs" enabled. Like the two options above, this only decides what gets stored - a matching message still shows up in your tabs for the rest of this session. Rules only apply to messages received from now on..
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Description {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide messages containing.
+        /// </summary>
+        internal static string Options_MessageFilters_Tab_Name {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Tab_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages matching any active rule are hidden from this tab only. Other tabs and the message database are not affected, so nothing is lost: delete a rule and save, and the messages come back. This applies to tell tabs too..
+        /// </summary>
+        internal static string Options_MessageFilters_Tab_Description {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Tab_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add rule.
+        /// </summary>
+        internal static string Options_MessageFilters_Add {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Add", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Delete this rule.
+        /// </summary>
+        internal static string Options_MessageFilters_Delete {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Delete", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Whether this rule is active. Untick to keep it around without it doing anything..
+        /// </summary>
+        internal static string Options_MessageFilters_Enabled {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Enabled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Text to look for.
+        /// </summary>
+        internal static string Options_MessageFilters_Hint {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Hint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Regex.
+        /// </summary>
+        internal static string Options_MessageFilters_Regex {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Regex", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This pattern does not compile, so the rule does nothing: {0}.
+        /// </summary>
+        internal static string Options_MessageFilters_Invalid {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Invalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This pattern uses lookaround or a backreference, so it runs on the backtracking engine with a 100 ms limit per message instead of being linear by construction. Patterns that hit the limit are ignored for that message and logged once..
+        /// </summary>
+        internal static string Options_MessageFilters_Backtracking {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Backtracking", resourceCulture);
+            }
+        }
     }
 }

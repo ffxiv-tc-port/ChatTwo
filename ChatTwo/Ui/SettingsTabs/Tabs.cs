@@ -233,6 +233,8 @@ public sealed class Tabs : ISettingsTab
                 }
             }
 
+            ImGuiUtil.MessageFilterEditor("tab-filters", Language.Options_MessageFilters_Tab_Name, Language.Options_MessageFilters_Tab_Description, tab.MessageFilters);
+
             using var disabled = ImRaii.Disabled(tab.Channel == InputChannel.Tell);
             ImGuiUtil.ChannelSelector(Language.Options_Tabs_Channels, tab.SelectedChannels);
             if (tab.Channel == InputChannel.Tell && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))

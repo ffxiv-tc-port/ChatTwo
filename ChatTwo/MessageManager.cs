@@ -303,7 +303,12 @@ public class MessageManager : IAsyncDisposable
 
         var isBattle = message.Code.IsBattle();
         var isCraftOrGather = message.Code.IsCraftOrGather();
-        if ((!isBattle && !isCraftOrGather) || (isBattle && Plugin.Config.DatabaseBattleMessages) || (isCraftOrGather && Plugin.Config.DatabaseGatherCraftMessages))
+        var storeByChannel = (!isBattle && !isCraftOrGather) || (isBattle && Plugin.Config.DatabaseBattleMessages) || (isCraftOrGather && Plugin.Config.DatabaseGatherCraftMessages);
+
+        // The text rules gate storage only, exactly like DatabaseBattleMessages above: the message
+        // still reaches the tabs for this session, it just will not be there after a refill. That
+        // asymmetry is deliberate - it is the established meaning of the options on this screen.
+        if (storeByChannel && !MessageFilterSet.Blocks(Plugin.Config.DatabaseMessageFilters, message))
             Store.UpsertMessage(message);
 
         var currentTabId = Plugin.CurrentTab.Identifier;

@@ -240,7 +240,30 @@ public sealed unsafe class Chat : IDisposable
         if (agent == null)
             return ret;
 
-        var channel = (uint) RaptureShellModule.Instance()->ChatType;
+        // RaptureShellModule.Instance() has two distinct failure modes and only one of them is
+        // catchable. Framework.Instance() is a [StaticAddress] stub that calls ThrowNullAddress ->
+        // InvalidOperationException when its signature fails to resolve; this detour is invoked from
+        // native code, so an exception escaping here terminates the process. The other mode is a
+        // plain null return (UIModule not built yet, or torn down - Instance() itself null-checks
+        // UIModule), and ->ChatType on that is an AccessViolationException, which try/catch cannot
+        // intercept in .NET Core. Guard both. Original was already called above, so the game's own
+        // behaviour is unaffected either way; we only skip updating our CurrentChannel bookkeeping,
+        // exactly like the agent == null and name == null paths below.
+        RaptureShellModule* shellModule;
+        try
+        {
+            shellModule = RaptureShellModule.Instance();
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Could not resolve RaptureShellModule, leaving current channel unchanged");
+            return ret;
+        }
+
+        if (shellModule == null)
+            return ret;
+
+        var channel = (uint) shellModule->ChatType;
         if (channel is 17 or 18)
             channel = (uint) InputChannel.Tell;
 

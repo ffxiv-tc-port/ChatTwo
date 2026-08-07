@@ -4,6 +4,7 @@ using ChatTwo.Util;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using System.Text.RegularExpressions;
+using ChatTwo.GameFunctions;
 using ChatTwo.GameFunctions.Types;
 using Dalamud.Game.Text;
 using Dalamud.Utility;
@@ -269,11 +270,29 @@ public partial class Message
                 }
 
                 nextIsMatch = false;
+                // The surrounding try already covers the *throw* half of these three Instance()
+                // calls (the [Agent] generator template contains no throw, but the chain underneath
+                // it holds three throwing stubs - see the taxonomy next to Chat.ResolveOrNull). What
+                // it cannot cover is the null half: all three pointers were dereferenced with no
+                // check, and a null dereference is an AccessViolationException, a corrupted-state
+                // exception that this catch - or any catch, in .NET Core - never sees. The resolves
+                // go through ResolveOrNull anyway so the throw is logged once per 30s with a useful
+                // key instead of being folded into the generic Debug line below.
+                //
+                // Degradation for all three: the <item>/<status>/<flag> placeholder is emitted as
+                // literal text, which is exactly what the existing catch below already does and what
+                // the "no item linked" / "no flag set" branches do.
                 try
                 {
                     if (split == "<item>")
                     {
-                        var agentChat = AgentChatLog.Instance();
+                        var agentChat = Chat.ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Message/linkedItem", "Could not resolve AgentChatLog; <item> was left as literal text");
+                        if (agentChat == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
                         var item = agentChat->LinkedItem;
 
                         if (item.ItemId == 0)
@@ -299,7 +318,14 @@ public partial class Message
                     }
                     else if (split == "<status>")
                     {
-                        var statusId = AgentChatLog.Instance()->ContextStatusId;
+                        var agentChat = Chat.ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Message/contextStatus", "Could not resolve AgentChatLog; <status> was left as literal text");
+                        if (agentChat == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
+                        var statusId = agentChat->ContextStatusId;
                         if (statusId == 0 || !Sheets.StatusSheet.TryGetRow(statusId, out var statusRow))
                         {
                             AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
@@ -319,7 +345,13 @@ public partial class Message
                     }
                     else if (split == "<flag>")
                     {
-                        var agentMap = AgentMap.Instance();
+                        var agentMap = Chat.ResolveOrNull<AgentMap>(&AgentMap.Instance, "Message/flagMarker", "Could not resolve AgentMap; <flag> was left as literal text");
+                        if (agentMap == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
                         if (agentMap->FlagMarkerCount == 0)
                         {
                             AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));

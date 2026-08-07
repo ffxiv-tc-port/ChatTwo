@@ -1,4 +1,5 @@
-﻿using Dalamud.Utility;
+﻿using ChatTwo.GameFunctions;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.Text;
 
@@ -27,7 +28,16 @@ public static class GlobalParametersCache
         if (!ThreadSafety.IsMainThread)
             throw new InvalidOperationException("GlobalParametersCache.Refresh must be called on the main thread.");
 
-        var rtm = RaptureTextModule.Instance();
+        // The null check was already here; the throw half was not. RaptureTextModule.Instance() is
+        // the hand-written chained kind (`uiModule == null ? null : uiModule->GetRaptureTextModule()`)
+        // and the throw comes from Framework.Instance() / framework->GetUIModule() below it. This
+        // runs from MessageManager's ChatMessage handler *before* the message is queued, so an
+        // escaping exception does not merely log - it drops that chat message from ChatTwo entirely
+        // while the vanilla log still shows it, which reads as "ChatTwo randomly loses messages".
+        //
+        // Degradation: the colour-code cache keeps its previous contents, so colour macros in this
+        // message resolve against slightly stale global parameters. The message itself still arrives.
+        var rtm = Chat.ResolveOrNull<RaptureTextModule>(&RaptureTextModule.Instance, "GlobalParametersCache/rtm", "Could not resolve RaptureTextModule; chat colour parameters are stale");
         if (rtm is null)
             return;
 

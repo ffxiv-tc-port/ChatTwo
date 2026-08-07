@@ -389,8 +389,29 @@ public unsafe class KeybindManager : IDisposable {
             LastRefresh = Environment.TickCount64;
         }
 
+        // This runs on every Framework.Update tick, so it is the hottest unguarded dereference in the
+        // plugin. RaptureAtkModule.Instance() is the hand-written chained kind (`uiModule == null ?
+        // null : uiModule->GetRaptureAtkModule()`): it returns null whenever the UI module is not
+        // built - which includes every frame between plugin load and character login, and every frame
+        // during logout - and it throws InvalidOperationException from Framework.Instance()
+        // ([StaticAddress]) or framework->GetUIModule() ([MemberFunction]) if either signature fails
+        // to resolve. Dereferencing the null is an AccessViolationException, uncatchable in .NET
+        // Core; the throw would be caught by Dalamud's Framework.Update dispatcher but would repeat
+        // every frame forever, which is what the throttled log is for.
+        //
+        // Degradation: we cannot tell whether the vanilla text box has focus, so we treat it as
+        // focused and hand this tick's keys back to the game. That is the fail-closed direction -
+        // the opposite guess would have ChatTwo swallowing keystrokes the player is typing into the
+        // vanilla chat box.
+        var atkModule = Chat.ResolveOrNull<RaptureAtkModule>(&RaptureAtkModule.Instance, "KeybindManager/atkModule", "Could not resolve RaptureAtkModule; keybind interception is paused this frame");
+        if (atkModule == null)
+        {
+            VanillaTextInputHasFocus = true;
+            return;
+        }
+
         // Vanilla text input has focus
-        if (RaptureAtkModule.Instance()->AtkModule.IsTextInputActive())
+        if (atkModule->AtkModule.IsTextInputActive())
         {
             VanillaTextInputHasFocus = true;
             return;
@@ -471,12 +492,59 @@ public unsafe class KeybindManager : IDisposable {
         }
     }
 
+    // Called for all ~60 intercepted keybinds every 5 seconds from HandleKeybinds.
+    //
+    // UIInputData.Instance() is the chained kind (`uiModule == null ? null :
+    // uiModule->GetUIInputData()`), so it has both failure modes, and GetKeybindByName is
+    // [MemberFunction], which throws on an unresolved signature. Resolving before allocating is
+    // deliberate and safe to reorder - neither has side effects - and it means the early return can
+    // never leak the string. Utf8String.FromString itself reaches IMemorySpace.GetDefaultSpace()
+    // ([MemberFunction]), so it is inside the try as well; the Dtor moved into a finally, because
+    // previously any throw from GetKeybindByName leaked the allocation.
+    //
+    // The `idString == null` check cannot fire today - IMemorySpace.Create<T>() does return null on
+    // allocation failure, but FromString dereferences it unconditionally, so the fault happens inside
+    // ClientStructs before the pointer reaches us. It is kept because it costs nothing and stops
+    // being dead the moment upstream grows a null check of its own.
+    //
+    // Degradation: an all-default Keybind. VirtualKey's default is NO_KEY, and KeyPressed returns
+    // false for NO_KEY, so the affected keybind simply never matches and the key falls through to the
+    // game. Fail-closed in the right direction: ChatTwo intercepting nothing is recoverable, ChatTwo
+    // intercepting the wrong key is not.
     private static Keybind GetKeybind(string id)
     {
+        var inputData = Chat.ResolveOrNull<UIInputData>(&UIInputData.Instance, "KeybindManager/inputData", "Could not resolve UIInputData; game keybinds could not be read and will not be intercepted");
+        if (inputData == null)
+            return new Keybind();
+
         var outData = new FFXIVClientStructs.FFXIV.Client.System.Input.Keybind();
-        var idString = Utf8String.FromString(id);
-        UIInputData.Instance()->GetKeybindByName(idString, &outData);
-        idString->Dtor(true);
+        Utf8String* idString;
+        try
+        {
+            idString = Utf8String.FromString(id);
+        }
+        catch (Exception ex)
+        {
+            Chat.LogErrorThrottled("KeybindManager/alloc", ex, "Could not allocate the keybind name string; game keybinds will not be intercepted");
+            return new Keybind();
+        }
+
+        if (idString == null)
+            return new Keybind();
+
+        try
+        {
+            inputData->GetKeybindByName(idString, &outData);
+        }
+        catch (Exception ex)
+        {
+            Chat.LogErrorThrottled("KeybindManager/getKeybind", ex, $"Could not read the game keybind '{id}'");
+            return new Keybind();
+        }
+        finally
+        {
+            idString->Dtor(true);
+        }
 
         var key1 = outData.KeySettings[0];
         var key2 = outData.KeySettings[1];

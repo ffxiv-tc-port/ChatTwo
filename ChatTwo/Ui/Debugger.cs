@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using ChatTwo.Code;
+using ChatTwo.GameFunctions;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
@@ -40,9 +41,21 @@ public class DebuggerWindow : Window
 
     public override unsafe void Draw()
     {
-        var agent = (nint) AgentItemDetail.Instance();
+        // Both Instance() calls in this window went through the [Agent] getter unguarded. The
+        // template contains no throw, but the chain under it does (Framework.Instance(),
+        // GetUIModule(), GetAgentByInternalId - see the taxonomy next to Chat.ResolveOrNull), and the
+        // ChannelLabel read further down dereferenced the result with no null check at all, which is
+        // an AccessViolationException rather than anything a catch could see.
+        //
+        // This is a debugger window, so the honest degradation is to say so on screen rather than to
+        // silently print a plausible-looking value: an unavailable agent renders "?" / "unavailable",
+        // never "0" or an empty channel, because a zero here would read as a real address.
+        var agent = (nint) Chat.ResolveOrNull<AgentItemDetail>(&AgentItemDetail.Instance, "Debugger/itemDetail", "Could not resolve AgentItemDetail for the debugger window");
         ImGui.TextUnformatted($"Current Cursor Pos: {ChatLogWindow.InputHandler.CursorPos}");
-        if (ImGui.Selectable($"Agent Address: {agent:X}"))
+        // "?" rather than "0": an unresolvable agent and an agent that genuinely lives at address 0
+        // are different facts, and printing the second when we mean the first sends whoever reads
+        // this window looking for a null-pointer bug that is not there.
+        if (ImGui.Selectable($"Agent Address: {(agent == 0 ? "?" : agent.ToString("X"))}") && agent != 0)
             ImGui.SetClipboardText(agent.ToString("X"));
 
         ImGuiHelpers.ScaledDummy(5.0f);
@@ -67,6 +80,14 @@ public class DebuggerWindow : Window
         ImGuiHelpers.ScaledDummy(5.0f);
 
         ImGui.TextColored(ImGuiColors.DalamudOrange, "Vanilla Chat");
-        ImGui.TextUnformatted($"Channel: {new ReadOnlySeString(AgentChatLog.Instance()->ChannelLabel).ExtractText()}");
+        // ChannelLabel is an inline Utf8String and the implicit conversion to ReadOnlySpan<byte> is
+        // `new(StringPtr, Length)`. On a half-torn-down agent StringPtr can be null while Length is
+        // still non-zero, and ExtractText then reads from address 0 - an AccessViolationException,
+        // not something the window's caller can catch. Same guard as Chat.ChangeChannelNameDetour.
+        var chatLog = Chat.ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Debugger/chatLog", "Could not resolve AgentChatLog for the debugger window");
+        var vanillaChannel = chatLog != null && chatLog->ChannelLabel.StringPtr.HasValue
+            ? new ReadOnlySeString(chatLog->ChannelLabel).ExtractText()
+            : "(unavailable)";
+        ImGui.TextUnformatted($"Channel: {vanillaChannel}");
     }
 }

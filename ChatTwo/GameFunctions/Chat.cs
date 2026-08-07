@@ -116,19 +116,33 @@ public sealed unsafe class Chat : IDisposable
     // Resolves a ClientStructs module while guarding BOTH of the failure modes an Instance() can
     // have, returning null if either one fires.
     //
-    // FFXIVClientStructs has three kinds of Instance() and they fail in *opposite* ways, which is
-    // exactly why one guard is never enough on its own. Verified against the generator templates in
-    // lib/FFXIVClientStructs, not assumed:
+    // FFXIVClientStructs' Instance() getters fail in *opposite* ways, which is exactly why one guard
+    // is never enough on its own. Verified against the generator templates in lib/FFXIVClientStructs,
+    // not assumed:
     //   - [StaticAddress] and [MemberFunction] generated ones THROW InvalidOperationException when
     //     their signature does not resolve (InteropGenerator.Rendering.cs emits
-    //     `if (pointer is null) ThrowHelper.ThrowNullAddress(...)`).
-    //   - [InfoProxy] generated ones only ever RETURN NULL; the template is literally
-    //     `infoModule == null ? null : (T*)infoModule->GetInfoProxyById(id)`
-    //     (FFXIVClientStructs.Generators/InfoProxyGetterGenerator.cs).
+    //     `if (pointer is null) ThrowHelper.ThrowNullAddress(...)`). A plain [StaticAddress] can
+    //     never additionally return null; `isPointer: true` can, because it returns *ppInstance and
+    //     the singleton may not be constructed yet.
+    //   - [VirtualFunction] ones never throw - they render as `VirtualTable->Name(this)` - but they
+    //     dereference `this`, so a null receiver is an access violation with nothing to catch it.
     //   - The hand-written chained ones (UIModule, RaptureShellModule, PronounModule,
-    //     RaptureLogModule, AcquaintanceModule, RaptureAtkModule) RETURN NULL as well, but they
-    //     stack BOTH modes onto a single expression: the null return is their own, and the throw
-    //     comes from Framework.Instance() - a [StaticAddress] stub - further down the chain.
+    //     RaptureLogModule, AcquaintanceModule, RaptureAtkModule, UIInputData, RaptureTextModule,
+    //     ItemFinderModule) RETURN NULL, but they stack BOTH modes onto a single expression: the
+    //     null return is their own, and the throw comes from Framework.Instance() - a
+    //     [StaticAddress] stub - further down the chain.
+    //   - [Agent] and [InfoProxy] generated ones ALSO have BOTH modes. CORRECTION to what an earlier
+    //     pass wrote here: the templates really are just
+    //     `agentModule == null ? null : (T*)agentModule->GetAgentByInternalId(id)` and
+    //     `infoModule  == null ? null : (T*)infoModule->GetInfoProxyById(id)`
+    //     (FFXIVClientStructs.Generators/{Agent,InfoProxy}GetterGenerator.cs), so reading only the
+    //     template says "returns null, never throws" - but that reads one link of a four-link chain.
+    //     AgentModule.Instance()/InfoModule.Instance() are hand-written chained getters that go
+    //     through UIModule.Instance() -> Framework.Instance() ([StaticAddress(isPointer: true)],
+    //     THROWS) -> framework->GetUIModule() ([MemberFunction], THROWS), and the final
+    //     GetAgentByInternalId/GetInfoProxyById are themselves [MemberFunction] (THROWS). Three
+    //     throw sites behind a template that contains none. Treat these exactly like the chained
+    //     kind: try AND null check.
     //
     // Handling only one of them is fake protection. Dereferencing the null return is an
     // AccessViolationException, a corrupted-state exception that try/catch cannot intercept in .NET
@@ -139,7 +153,11 @@ public sealed unsafe class Chat : IDisposable
     // generates `if (ppInstance is null) throw; return *ppInstance;`, so it throws on an unresolved
     // signature but still returns null before the game has constructed the Framework. ClientStructs
     // agrees - every chained Instance() above starts with its own `framework == null` check.
-    private static T* ResolveOrNull<T>(delegate*<T*> instance, string logKey, string logMessage) where T : unmanaged
+    //
+    // internal rather than private: Context, GameFunctions, Party, KeybindManager, Message,
+    // GlobalParametersCache and the Debugger window all need the same guard, and a hand-copied one
+    // is exactly how a copy ends up with only half of it.
+    internal static T* ResolveOrNull<T>(delegate*<T*> instance, string logKey, string logMessage) where T : unmanaged
     {
         try
         {
@@ -160,30 +178,53 @@ public sealed unsafe class Chat : IDisposable
     internal static UIModule* GetUIModuleOrNull(string logKey, string logMessage)
         => ResolveOrNull<UIModule>(&UIModule.Instance, logKey, logMessage);
 
-    // Both of these resolve through an [InfoProxy] getter, which is the return-null kind and never
-    // throws - so a plain null check is the whole fix, no try needed. GetInfoProxyById can also
-    // hand back null for a proxy that is not registered yet (before the info module has finished
-    // building, i.e. early login). Degradation: returning null is a value both callers already
-    // handle - ChatLog.Window skips the channel in the switcher list (string.IsNullOrWhiteSpace)
-    // and renders an empty name in the input line, exactly as it does for an unassigned linkshell.
+    // Both of these resolve through an [InfoProxy] getter. An earlier pass added the null check here
+    // and stated in the comment that no try was needed because that generator "never throws"; see
+    // the corrected taxonomy above - it throws in three places behind the template. The resolve now
+    // goes through ResolveOrNull, and the null check stays because ResolveOrNull also returns null
+    // on the catch path (and GetInfoProxyById genuinely can hand back null for a proxy that is not
+    // registered yet, i.e. early login).
+    //
+    // The name-fetching calls themselves are [MemberFunction] too, so they get the same treatment:
+    // GetLinkShellName / GetCrossworldLinkshellName throw on an unresolved signature.
+    //
+    // Degradation: returning null is a value both callers already handle - ChatLog.Window skips the
+    // channel in the switcher list (string.IsNullOrWhiteSpace) and renders an empty name in the
+    // input line, exactly as it does for an unassigned linkshell.
     public static string? GetLinkshellName(uint idx)
     {
-        var proxy = InfoProxyChat.Instance();
+        var proxy = Chat.ResolveOrNull<InfoProxyChat>(&InfoProxyChat.Instance, "GetLinkshellName/proxy", "Could not resolve InfoProxyChat; the linkshell name is unavailable");
         if (proxy == null)
             return null;
 
-        var utf = proxy->GetLinkShellName(idx);
-        return utf.HasValue ? utf.ToString() : null;
+        try
+        {
+            var utf = proxy->GetLinkShellName(idx);
+            return utf.HasValue ? utf.ToString() : null;
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("GetLinkshellName/call", ex, "Could not read the linkshell name");
+            return null;
+        }
     }
 
     public static string? GetCrossLinkshellName(uint idx)
     {
-        var proxy = InfoProxyCrossWorldLinkshell.Instance();
+        var proxy = Chat.ResolveOrNull<InfoProxyCrossWorldLinkshell>(&InfoProxyCrossWorldLinkshell.Instance, "GetCrossLinkshellName/proxy", "Could not resolve InfoProxyCrossWorldLinkshell; the cross-world linkshell name is unavailable");
         if (proxy == null)
             return null;
 
-        var utf = proxy->GetCrossworldLinkshellName(idx);
-        return utf != null ? utf->ToString() : null;
+        try
+        {
+            var utf = proxy->GetCrossworldLinkshellName(idx);
+            return utf != null ? utf->ToString() : null;
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("GetCrossLinkshellName/call", ex, "Could not read the cross-world linkshell name");
+            return null;
+        }
     }
 
     private static int GetRotateIdx(RotateMode mode) => mode switch
@@ -244,7 +285,11 @@ public sealed unsafe class Chat : IDisposable
 
     private void Login()
     {
-        var agent = AgentChatLog.Instance();
+        // [Agent] getter: both failure modes, see the taxonomy near ResolveOrNull. Degradation is
+        // unchanged from the existing null path - the vanilla channel name is not sampled on this
+        // login, so the input line keeps whatever channel it already had until the next channel
+        // change fires ChangeChannelNameDetour again.
+        var agent = ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Login/agent", "Could not resolve AgentChatLog; the current channel was not sampled on login");
         if (agent == null)
             return;
 
@@ -423,8 +468,12 @@ public sealed unsafe class Chat : IDisposable
     {
         // AgentChatLog.Instance() really can be null - Login() above checks for exactly that - and
         // dereferencing it is an AccessViolationException, which try/catch cannot intercept in .NET
-        // Core. fail-closed: if we cannot read the reply channel, just let the game do its own thing.
-        var chatLog = AgentChatLog.Instance();
+        // Core. It can also THROW, which the earlier pass missed because the [Agent] generator
+        // template contains no throw: the throw sites are in the chain underneath it (see the
+        // taxonomy near ResolveOrNull). This method is the detour itself, so an escaping throw
+        // terminates the process. fail-closed: if we cannot read the reply channel, just let the
+        // game do its own thing.
+        var chatLog = ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "ReplyInSelectedChatMode/agent", "Could not resolve AgentChatLog; leaving the reply channel to the game");
         if (chatLog == null)
         {
             ReplyInSelectedChatModeHook!.Original(agent);
@@ -506,22 +555,26 @@ public sealed unsafe class Chat : IDisposable
         return false;
     }
 
-    // The info-proxy Instance() getters are source-generated as
-    // `infoModule == null ? null : (T*)infoModule->GetInfoProxyById(id)`, i.e. the chained kind that
-    // returns null rather than throwing, and GetInfoProxyById can itself return null for a proxy
-    // that is not registered. Dereferencing that is an AccessViolationException, which try/catch
-    // cannot intercept. This matters more than it looks: IsChannelOrExistingLinkshell sits on the
-    // native-reachable path ReplyInSelectedChatModeDetour -> SetChannelWithExtraChat -> SetChannel,
-    // and it used to be evaluated before SetChannel's own RaptureShellModule guard - so without
-    // these checks that guard could never be reached. Degradation: an unresolvable proxy reports
-    // "this linkshell does not exist", which suppresses the channel switch for linkshell channels
-    // only; every other channel short-circuits on idx == uint.MaxValue before reaching here.
+    // These two are the highest-severity consequence of the taxonomy correction above, so spelling
+    // it out: IsChannelOrExistingLinkshell sits on the native-reachable path
+    // ReplyInSelectedChatModeDetour -> SetChannelWithExtraChat -> SetChannel, and that detour has no
+    // try of its own. An earlier pass added the null check but explicitly recorded that the
+    // [InfoProxy] getter "returns null rather than throwing", so it left the throw half unguarded -
+    // and a throw from InfoProxyLinkshell.Instance() (via Framework.Instance(), GetUIModule() or
+    // GetInfoProxyById(), all of which throw on an unresolved signature) escapes back into game code
+    // and terminates the process. The null check is still needed for its own sake: GetInfoProxyById
+    // returns null for a proxy that is not registered yet, and dereferencing that is an
+    // AccessViolationException, which try/catch cannot intercept.
+    //
+    // Degradation: an unresolvable proxy reports "this linkshell does not exist", which suppresses
+    // the channel switch for linkshell channels only; every other channel short-circuits on
+    // idx == uint.MaxValue before reaching here.
     public static bool ValidLinkshell(uint idx)
     {
         if (idx > 7)
             return false;
 
-        var proxy = InfoProxyLinkshell.Instance();
+        var proxy = Chat.ResolveOrNull<InfoProxyLinkshell>(&InfoProxyLinkshell.Instance, "ValidLinkshell/proxy", "Could not resolve InfoProxyLinkshell; treating the linkshell as non-existent");
         if (proxy == null)
             return false;
 
@@ -533,7 +586,7 @@ public sealed unsafe class Chat : IDisposable
         if (idx > 7)
             return false;
 
-        var proxy = InfoProxyCrossWorldLinkshell.Instance();
+        var proxy = Chat.ResolveOrNull<InfoProxyCrossWorldLinkshell>(&InfoProxyCrossWorldLinkshell.Instance, "ValidCrossLinkshell/proxy", "Could not resolve InfoProxyCrossWorldLinkshell; treating the cross-world linkshell as non-existent");
         if (proxy == null)
             return false;
 

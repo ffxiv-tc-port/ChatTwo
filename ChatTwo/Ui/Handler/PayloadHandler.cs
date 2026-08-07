@@ -218,6 +218,12 @@ public sealed class PayloadHandler
             if (ImGui.Selectable(string.Format(Language.Context_ChannelDisable, name)) && blocked == null)
             {
                 tab.SelectedChannels.Remove(type);
+
+                // The settings window holds a snapshot of the tab list taken when it opened and
+                // copies it back wholesale on Save, so this edit has to land in that snapshot too
+                // or saving settings would silently undo it. See SettingsWindow.MirrorTabEdit.
+                InputHandler.Plugin.SettingsWindow.MirrorTabEdit(tab.Identifier, mirror => mirror.SelectedChannels.Remove(type));
+
                 InputHandler.Plugin.SaveConfig();
 
                 // Also drop what is already on screen, otherwise it looks like nothing happened
@@ -295,6 +301,17 @@ public sealed class PayloadHandler
                     tab.SelectedChannels.Remove(channel);
                     tab.Messages.RemoveWhere(message => message.Code.Type == channel);
                 }
+
+                // Same reason as the one-click disable above: keep the settings window's snapshot
+                // in step so pressing Save there doesn't revert this toggle.
+                var nowEnabled = enabled;
+                InputHandler.Plugin.SettingsWindow.MirrorTabEdit(tab.Identifier, mirror =>
+                {
+                    if (nowEnabled)
+                        mirror.SelectedChannels[channel] = (ChatSourceExt.All, ChatSourceExt.All);
+                    else
+                        mirror.SelectedChannels.Remove(channel);
+                });
 
                 InputHandler.Plugin.SaveConfig();
             }

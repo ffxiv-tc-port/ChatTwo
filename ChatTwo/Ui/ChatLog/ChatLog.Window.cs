@@ -1005,13 +1005,26 @@ public partial class ChatLog : Window, IChatWindow
         var anyChanged = false;
         var tabs = Plugin.Config.Tabs;
 
+        // Everything in this menu edits the live config directly. The settings window keeps its
+        // own snapshot of the tab list and copies it back wholesale on Save, so each edit is also
+        // mirrored into that snapshot - otherwise opening settings, renaming/deleting/moving a tab
+        // here, then pressing Save would silently undo the change. Mirroring per edit (rather than
+        // resyncing the whole snapshot) preserves whatever is unsaved in the settings window.
+        // See SettingsWindow.MirrorTabEdit.
+        var identifier = tab.Identifier;
+
         ImGui.SetNextItemWidth(250f * ImGuiHelpers.GlobalScale);
         if (ImGui.InputText("##tab-name", ref tab.Name, 128))
+        {
+            var name = tab.Name;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.Name = name);
             anyChanged = true;
+        }
 
         if (ImGuiUtil.IconButton(FontAwesomeIcon.TrashAlt, tooltip: Language.ChatLog_Tabs_Delete))
         {
             tabs.RemoveAt(i);
+            Plugin.SettingsWindow.MirrorTabRemoval(identifier);
             Plugin.WantedTab = 0;
             Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
 
@@ -1025,7 +1038,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowLeft, Language.ChatLog_Tabs_MoveLeft);
         if (ImGuiUtil.IconButton(leftIcon, tooltip: leftTooltip) && i > 0)
         {
+            var neighbour = tabs[i - 1].Identifier;
             (tabs[i - 1], tabs[i]) = (tabs[i], tabs[i - 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -1037,7 +1052,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowRight, Language.ChatLog_Tabs_MoveRight);
         if (ImGuiUtil.IconButton(rightIcon, tooltip: rightTooltip) && i < tabs.Count - 1)
         {
+            var neighbour = tabs[i + 1].Identifier;
             (tabs[i + 1], tabs[i]) = (tabs[i], tabs[i + 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -1046,6 +1063,7 @@ public partial class ChatLog : Window, IChatWindow
         if (ImGuiUtil.IconButton(FontAwesomeIcon.WindowRestore, tooltip: Language.ChatLog_Tabs_PopOut))
         {
             tab.PopOut = true;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.PopOut = true);
             Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
             anyChanged = true;
         }

@@ -91,9 +91,12 @@ public sealed unsafe class Chat : IDisposable
     // is running. Error level is deliberate: users run LogLevel 2, so Debug/Verbose would never
     // reach them, and this is exactly the sort of thing we want reported back.
     private static readonly TimeSpan LogThrottleInterval = TimeSpan.FromSeconds(30);
-    private readonly Dictionary<string, (DateTime Last, int Suppressed)> ThrottledLogs = new();
+    private static readonly Dictionary<string, (DateTime Last, int Suppressed)> ThrottledLogs = new();
 
-    private void LogErrorThrottled(string key, Exception ex, string message)
+    // internal static rather than instance: ChatBox is a static class and needs the same throttle.
+    // Sharing the one dictionary is deliberate - a second throttling mechanism would defeat the
+    // point, since the failures being reported are process-wide and permanent for the session.
+    internal static void LogErrorThrottled(string key, Exception ex, string message)
     {
         var now = DateTime.UtcNow;
         ThrottledLogs.TryGetValue(key, out var state);
@@ -110,26 +113,37 @@ public sealed unsafe class Chat : IDisposable
             Plugin.Log.Error(ex, message);
     }
 
-    // Resolves RaptureShellModule while guarding BOTH of its failure modes, returning null if
-    // either one fires.
+    // Resolves a ClientStructs module while guarding BOTH of the failure modes an Instance() can
+    // have, returning null if either one fires.
     //
-    // FFXIVClientStructs has two kinds of Instance() and they fail in opposite ways. The ones the
-    // [StaticAddress] generator emits throw InvalidOperationException (via
-    // ThrowHelper.ThrowNullAddress) when their signature does not resolve. The hand-written chained
-    // ones simply return null. RaptureShellModule.Instance() is the chained kind - it is literally
-    // `uiModule == null ? null : uiModule->GetRaptureShellModule()` - which means it stacks BOTH
-    // modes onto a single expression: the null return is its own, and the throw comes from
-    // Framework.Instance() one level further down inside UIModule.Instance().
+    // FFXIVClientStructs has three kinds of Instance() and they fail in *opposite* ways, which is
+    // exactly why one guard is never enough on its own. Verified against the generator templates in
+    // lib/FFXIVClientStructs, not assumed:
+    //   - [StaticAddress] and [MemberFunction] generated ones THROW InvalidOperationException when
+    //     their signature does not resolve (InteropGenerator.Rendering.cs emits
+    //     `if (pointer is null) ThrowHelper.ThrowNullAddress(...)`).
+    //   - [InfoProxy] generated ones only ever RETURN NULL; the template is literally
+    //     `infoModule == null ? null : (T*)infoModule->GetInfoProxyById(id)`
+    //     (FFXIVClientStructs.Generators/InfoProxyGetterGenerator.cs).
+    //   - The hand-written chained ones (UIModule, RaptureShellModule, PronounModule,
+    //     RaptureLogModule, AcquaintanceModule, RaptureAtkModule) RETURN NULL as well, but they
+    //     stack BOTH modes onto a single expression: the null return is their own, and the throw
+    //     comes from Framework.Instance() - a [StaticAddress] stub - further down the chain.
     //
     // Handling only one of them is fake protection. Dereferencing the null return is an
     // AccessViolationException, a corrupted-state exception that try/catch cannot intercept in .NET
     // Core at all; and a throw that escapes a detour back into native code terminates the process.
     // Callers must therefore both use this instead of Instance() and null-check what comes back.
-    private RaptureShellModule* GetRaptureShellModuleOrNull(string logKey, string logMessage)
+    //
+    // Note that Framework.Instance() itself has both modes too: [StaticAddress(isPointer: true)]
+    // generates `if (ppInstance is null) throw; return *ppInstance;`, so it throws on an unresolved
+    // signature but still returns null before the game has constructed the Framework. ClientStructs
+    // agrees - every chained Instance() above starts with its own `framework == null` check.
+    private static T* ResolveOrNull<T>(delegate*<T*> instance, string logKey, string logMessage) where T : unmanaged
     {
         try
         {
-            return RaptureShellModule.Instance();
+            return instance();
         }
         catch (Exception ex)
         {
@@ -138,15 +152,37 @@ public sealed unsafe class Chat : IDisposable
         }
     }
 
+    private static RaptureShellModule* GetRaptureShellModuleOrNull(string logKey, string logMessage)
+        => ResolveOrNull<RaptureShellModule>(&RaptureShellModule.Instance, logKey, logMessage);
+
+    // internal rather than private: ChatBox.SendMessageUnsafe and ChatLog.Window need a guarded
+    // UIModule too, and a hand-copied guard is exactly how one copy ends up missing a half.
+    internal static UIModule* GetUIModuleOrNull(string logKey, string logMessage)
+        => ResolveOrNull<UIModule>(&UIModule.Instance, logKey, logMessage);
+
+    // Both of these resolve through an [InfoProxy] getter, which is the return-null kind and never
+    // throws - so a plain null check is the whole fix, no try needed. GetInfoProxyById can also
+    // hand back null for a proxy that is not registered yet (before the info module has finished
+    // building, i.e. early login). Degradation: returning null is a value both callers already
+    // handle - ChatLog.Window skips the channel in the switcher list (string.IsNullOrWhiteSpace)
+    // and renders an empty name in the input line, exactly as it does for an unassigned linkshell.
     public static string? GetLinkshellName(uint idx)
     {
-        var utf = InfoProxyChat.Instance()->GetLinkShellName(idx);
+        var proxy = InfoProxyChat.Instance();
+        if (proxy == null)
+            return null;
+
+        var utf = proxy->GetLinkShellName(idx);
         return utf.HasValue ? utf.ToString() : null;
     }
 
     public static string? GetCrossLinkshellName(uint idx)
     {
-        var utf = InfoProxyCrossWorldLinkshell.Instance()->GetCrossworldLinkshellName(idx);
+        var proxy = InfoProxyCrossWorldLinkshell.Instance();
+        if (proxy == null)
+            return null;
+
+        var utf = proxy->GetCrossworldLinkshellName(idx);
         return utf != null ? utf->ToString() : null;
     }
 
@@ -157,9 +193,18 @@ public sealed unsafe class Chat : IDisposable
         _ => 0,
     };
 
+    // UIModule.Instance() is the hand-written chained kind, so it needs both halves: the try (from
+    // Framework.Instance() deep inside) and the null check. The rotate calls themselves are
+    // [VirtualFunction], generated as `VirtualTable->Rotate...(this)`, so they add no throw of their
+    // own - but they dereference `this`, which makes a null UIModule an AccessViolationException
+    // rather than anything catchable. Degradation: the linkshell cycle is not advanced, so the
+    // keybind does nothing this press instead of taking the game down.
     public static void RotateLinkshellHistory(RotateMode mode)
     {
-        var uiModule = UIModule.Instance();
+        var uiModule = GetUIModuleOrNull("RotateLinkshellHistory/uiModule", "Could not resolve UIModule; the linkshell history was not rotated");
+        if (uiModule == null)
+            return;
+
         if (mode == RotateMode.None)
             uiModule->LinkshellCycle = -1;
 
@@ -167,7 +212,13 @@ public sealed unsafe class Chat : IDisposable
     }
 
     public static void RotateCrossLinkshellHistory(RotateMode mode)
-        => UIModule.Instance()->RotateCrossLinkshellHistory(GetRotateIdx(mode));
+    {
+        var uiModule = GetUIModuleOrNull("RotateCrossLinkshellHistory/uiModule", "Could not resolve UIModule; the cross-world linkshell history was not rotated");
+        if (uiModule == null)
+            return;
+
+        uiModule->RotateCrossLinkshellHistory(GetRotateIdx(mode));
+    }
 
     // This function looks up a channel's user-defined color.
     // If this function ever returns 0, it returns null instead.
@@ -518,7 +569,14 @@ public sealed unsafe class Chat : IDisposable
         {
             case InputChannel.Linkshell1 or InputChannel.CrossLinkshell1 when rotate != RotateMode.None:
             {
-                var module = UIModule.Instance();
+                // Chained Instance(): try plus null check, see GetUIModuleOrNull. LinkshellCycle is
+                // a plain field read at a fixed offset, so a null module here is an
+                // AccessViolationException with nothing to catch it. Degradation: fall through to
+                // `return channel`, i.e. the unrotated channel the caller asked for - the same
+                // value this method returns for every non-linkshell channel.
+                var module = GetUIModuleOrNull("ResolveTempInputChannel/uiModule", "Could not resolve UIModule; the temporary linkshell channel was not rotated");
+                if (module == null)
+                    return channel;
 
                 var currentIndex = channel is InputChannel.Linkshell1 ? (uint) module->LinkshellCycle : (uint) module->CrossWorldLinkshellCycle;
                 if (currentTempChannel != null)
@@ -583,7 +641,6 @@ public sealed unsafe class Chat : IDisposable
         if (channel.IsExtraChatLinkshell())
             return;
 
-        var target = Utf8String.FromString(tellTarget?.ToTargetString() ?? "");
         var idx = channel.LinkshellIndex();
         if (idx == uint.MaxValue)
             idx = 0;
@@ -591,18 +648,65 @@ public sealed unsafe class Chat : IDisposable
         // SetChannel is reachable from native code (ReplyInSelectedChatModeDetour ->
         // SetChannelWithExtraChat -> here), so both failure modes are fatal: an escaping throw
         // terminates the process from inside the detour, and a null deref is an uncatchable
-        // AccessViolationException. Resolving the shell module first is deliberate - it is the only
-        // call left in this method that can throw (Framework.Instance() deep inside the chain), and
-        // a successful resolve proves that static address is good, so the
-        // IsChannelOrExistingLinkshell call cannot then throw from the same source. Neither call has
-        // side effects, so reordering them is safe. Degradation when the guard fires: the game's own
-        // chat channel is not switched, so the next message the user sends goes to whatever channel
-        // vanilla currently has. target is still freed either way.
+        // AccessViolationException. Resolving the shell module first is deliberate - both it and
+        // IsChannelOrExistingLinkshell are side-effect free, so reordering is safe, and a successful
+        // resolve proves Framework's static address is good. Degradation for every guard below: the
+        // game's own chat channel is not switched, so the next message the user sends goes to
+        // whatever channel vanilla currently has.
         var shellModule = GetRaptureShellModuleOrNull("SetChannel/shellModule", "Could not resolve RaptureShellModule; the game's chat channel was not switched");
-        if (shellModule != null && IsChannelOrExistingLinkshell(channel))
-            shellModule->ChangeChatChannel(tellTarget != null ? 17 : (int)channel, idx, target, true);
+        if (shellModule == null || !IsChannelOrExistingLinkshell(channel))
+            return;
 
-        target->Dtor(true);
+        // Correcting an assertion the previous pass left here: the shell module resolve was NOT the
+        // only thing in this method that can throw. Utf8String.FromString reaches
+        // IMemorySpace.GetDefaultSpace(), which is [MemberFunction] and therefore throws
+        // InvalidOperationException when its signature does not resolve - and this runs inside a
+        // native detour, where that terminates the process. The allocation now happens after the
+        // guards above rather than before them; nothing observable depended on the old ordering,
+        // since the string was only ever handed to ChangeChatChannel and then freed.
+        //
+        // The `target == null` check below is defence in depth and cannot fire today:
+        // IMemorySpace.Create<T>() does return null on allocation failure, but FromString then
+        // dereferences it unconditionally (`newString->SetString(str)`), so the access violation
+        // happens inside ClientStructs before the pointer ever reaches us. Keep the check anyway -
+        // it costs nothing and stops being dead the moment that upstream code grows a null check.
+        Utf8String* target;
+        try
+        {
+            target = Utf8String.FromString(tellTarget?.ToTargetString() ?? "");
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("SetChannel/alloc", ex, "Could not allocate the tell target string; the game's chat channel was not switched");
+            return;
+        }
+
+        if (target == null)
+            return;
+
+        try
+        {
+            // ChangeChatChannel is [MemberFunction], so it throws on an unresolved signature too.
+            ChangeChatChannelSafe(shellModule, tellTarget != null ? 17 : (int) channel, idx, target);
+        }
+        finally
+        {
+            target->Dtor(true);
+        }
+    }
+
+    // Split out so the catch cannot accidentally swallow a failure from target->Dtor in the finally
+    // above, and so the fail-closed behaviour is stated in one place.
+    private static void ChangeChatChannelSafe(RaptureShellModule* shellModule, int channel, uint idx, Utf8String* target)
+    {
+        try
+        {
+            shellModule->ChangeChatChannel(channel, idx, target, true);
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("SetChannel/changeChannel", ex, "ChangeChatChannel failed; the game's chat channel was not switched");
+        }
     }
 
     public void SetEurekaTellChannel(string name, string worldName, ushort worldId, ulong accountId, ulong objectId, ushort reason, bool setChatType)
@@ -617,9 +721,6 @@ public sealed unsafe class Chat : IDisposable
         // Only works because we use the SetTellTargetInForay function to set all required information
         Plugin.ChatLog.TellSpecial = true;
 
-        var utfName = Utf8String.FromString(name);
-        var utfWorld = Utf8String.FromString(worldName);
-
         // Only reachable from PayloadHandler during draw, so an escaping throw would "merely" cost
         // the window for that frame - but the null half is fatal no matter who calls, because
         // dereferencing a null Instance() is an AccessViolationException. Guard both; see
@@ -628,16 +729,61 @@ public sealed unsafe class Chat : IDisposable
         // stays true until the next ChatLog.Activated overwrites it, which only makes the next chat
         // log refresh defer to vanilla once.
         var shellModule = GetRaptureShellModuleOrNull("SetEurekaTellChannel/shellModule", "Could not resolve RaptureShellModule; the Eureka/Bozja tell target was not set");
-        if (shellModule != null)
-            shellModule->SetTellTargetInForay(utfName, utfWorld, worldId, accountId, objectId, reason, setChatType);
+        if (shellModule == null)
+            return;
 
-        utfName->Dtor(true);
-        utfWorld->Dtor(true);
+        // Allocation moved below the guard for the same reason as in SetChannel: both strings were
+        // previously allocated before anything could bail out, and Utf8String.FromString can throw
+        // via IMemorySpace.GetDefaultSpace() ([MemberFunction]). Freeing is now in a finally, so an
+        // exception out of SetTellTargetInForay no longer leaks two native strings. The null checks
+        // are defence in depth and unreachable today - see the note in SetChannel.
+        Utf8String* utfName;
+        Utf8String* utfWorld;
+        try
+        {
+            utfName = Utf8String.FromString(name);
+            utfWorld = Utf8String.FromString(worldName);
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("SetEurekaTellChannel/alloc", ex, "Could not allocate the tell target strings; the Eureka/Bozja tell target was not set");
+            return;
+        }
+
+        if (utfName == null || utfWorld == null)
+        {
+            if (utfName != null)
+                utfName->Dtor(true);
+            if (utfWorld != null)
+                utfWorld->Dtor(true);
+            return;
+        }
+
+        try
+        {
+            shellModule->SetTellTargetInForay(utfName, utfWorld, worldId, accountId, objectId, reason, setChatType);
+        }
+        finally
+        {
+            utfName->Dtor(true);
+            utfWorld->Dtor(true);
+        }
     }
 
     public TellHistoryInfo? GetTellHistoryInfo(int index)
     {
-        var acquaintance = AcquaintanceModule.Instance()->GetTellHistory(index);
+        // AcquaintanceModule.Instance() is the chained kind (uiModule == null ? null :
+        // uiModule->GetAcquaintanceModule()), so it needs the try for the throw from
+        // Framework.Instance() and the null check for its own null return. GetTellHistory is
+        // [MemberFunction] and dereferences `this`, so calling it on a null module is an
+        // AccessViolationException, not something the try would catch. Degradation: returns null,
+        // which is what this method already returns for an empty history slot - ChatLog.Window
+        // checks `tellInfo != null` and simply leaves the tell target alone.
+        var module = ResolveOrNull<AcquaintanceModule>(&AcquaintanceModule.Instance, "GetTellHistoryInfo/acquaintanceModule", "Could not resolve AcquaintanceModule; the tell history is unavailable");
+        if (module == null)
+            return null;
+
+        var acquaintance = module->GetTellHistory(index);
         if (acquaintance == null || acquaintance->ContentId == 0)
             return null;
 
@@ -650,7 +796,24 @@ public sealed unsafe class Chat : IDisposable
 
     public void SendTellUsingCommandInner(byte[] message)
     {
-        var mes = Utf8String.FromSequence(message.NullTerminate());
+        // The allocation itself can throw (Utf8String.FromSequence -> IMemorySpace.GetDefaultSpace,
+        // which is [MemberFunction]); previously that throw happened outside the try, so it escaped
+        // uncaught. It is caught here now for consistency with the rest of the file, and because
+        // `mes` would otherwise be unassigned when the finally below runs. The null check is
+        // defence in depth - see the note in SetChannel for why it cannot fire today.
+        Utf8String* mes;
+        try
+        {
+            mes = Utf8String.FromSequence(message.NullTerminate());
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("SendTellUsingCommandInner/alloc", ex, "Could not allocate the message string; the tell was not sent");
+            return;
+        }
+
+        if (mes == null)
+            return;
 
         try
         {
@@ -663,20 +826,22 @@ public sealed unsafe class Chat : IDisposable
             var shellModule = GetRaptureShellModuleOrNull("SendTellUsingCommandInner/shellModule", "Could not resolve RaptureShellModule; the tell was not sent");
             if (shellModule != null)
             {
-                var uiModule = UIModule.Instance();
+                var uiModule = GetUIModuleOrNull("SendTellUsingCommandInner/uiModule", "Could not resolve UIModule; the tell was not sent");
                 if (uiModule != null)
                     shellModule->ExecuteCommandInner(mes, uiModule);
             }
 
-            var atkModule = RaptureAtkModule.Instance();
+            var atkModule = ResolveOrNull<RaptureAtkModule>(&RaptureAtkModule.Instance, "SendTellUsingCommandInner/atkModule", "Could not resolve RaptureAtkModule; vanilla chat may keep keyboard focus");
             if (atkModule != null)
                 atkModule->ClearFocus(); // Clear the focus of vanilla chat that was still active
         }
         finally
         {
-            // try/finally, not try/catch: a throw out of UIModule/RaptureAtkModule resolution still
-            // propagates exactly as it did before (this path is managed-only, so Dalamud catches it
-            // and the window skips a frame), but the native Utf8String no longer leaks when it does.
+            // try/finally rather than try/catch: the two resolves inside now swallow their own
+            // throws, so what is left to propagate is a throw out of ExecuteCommandInner/ClearFocus
+            // themselves. That behaves exactly as it did before (this path is managed-only, reached
+            // from SendHandler, so Dalamud catches it and the window skips a frame) - but the native
+            // Utf8String no longer leaks when it happens.
             mes->Dtor(true);
         }
     }
@@ -690,39 +855,136 @@ public sealed unsafe class Chat : IDisposable
             return;
         }
 
-        var uName = Utf8String.FromString(name);
-        var uMessage = Utf8String.FromSequence(message.NullTerminate());
+        // Everything native is resolved BEFORE anything is allocated, so a failed resolve has
+        // nothing to unwind. This method is only reachable from SendHandler (managed), so a throw
+        // costs a frame rather than the process - but every null below would be an
+        // AccessViolationException, which is fatal no matter who called.
+        //
+        // The two [Signature] function pointers get the same treatment. Dalamud leaves them at zero
+        // when a signature fails to resolve (it logs and carries on, it does not throw), and calling
+        // a null function pointer is an access violation. They were being called unchecked.
+        var pronounModule = ResolveOrNull<PronounModule>(&PronounModule.Instance, "SendTell/pronounModule", "Could not resolve PronounModule; the tell was not sent");
+        var logModule = ResolveOrNull<RaptureLogModule>(&RaptureLogModule.Instance, "SendTell/logModule", "Could not resolve RaptureLogModule; the tell was not sent");
+        var networkModule = GetNetworkModuleOrNull();
+        if (pronounModule == null || logModule == null || networkModule == null || SendTellNative == null || PrintTellNative == null)
+        {
+            Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+            return;
+        }
 
-        var encoded = Utf8String.FromUtf8String(PronounModule.Instance()->ProcessString(uMessage, true));
-        var decoded = EncodeMessage(rawText);
+        // EncodeMessage resolves PronounModule itself and now returns null when it cannot.
+        var encodedText = EncodeMessage(rawText);
+        if (encodedText == null)
+        {
+            Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+            return;
+        }
+
+        var decoded = encodedText;
         AutoTranslate.ReplaceWithPayload(ref decoded);
 
-        using var decodedUtf8String = new Utf8String(decoded.NullTerminate());
+        // Allocations move inside a try/finally so the three native strings are freed on every exit
+        // path. Previously an exception anywhere between the allocations and the Dtor calls leaked
+        // all three, and a null from any of them made the Dtor itself an access violation. As in
+        // SetChannel, the null checks cannot fire today (ClientStructs dereferences the allocation
+        // before returning it) but cost nothing and stop being dead if upstream adds a check.
+        Utf8String* uName = null;
+        Utf8String* uMessage = null;
+        Utf8String* encoded = null;
+        try
+        {
+            uName = Utf8String.FromString(name);
+            uMessage = Utf8String.FromSequence(message.NullTerminate());
+            if (uName == null || uMessage == null)
+            {
+                Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+                return;
+            }
 
-        var logModule = RaptureLogModule.Instance();
-        var networkModule = Framework.Instance()->GetNetworkModuleProxy()->NetworkModule;
+            // FromUtf8String null-checks its argument, so a null ProcessString result yields an
+            // empty string rather than a crash; only the result of the allocation needs checking.
+            encoded = Utf8String.FromUtf8String(pronounModule->ProcessString(uMessage, true));
+            if (encoded == null)
+            {
+                Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+                return;
+            }
 
-        // // TODO: Remap TellReasons
-        if (reason == TellReason.Direct)
-            reason = TellReason.Friend;
+            using var decodedUtf8String = new Utf8String(decoded.NullTerminate());
 
-        var ok = SendTellNative(networkModule, contentId, homeWorld, uName, encoded, (ushort) reason, homeWorld);
-        if (ok == 1)
-            PrintTellNative(logModule, 33, uName, &decodedUtf8String, 0, contentId, homeWorld, 255, 0, 0);
-        else
-            Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+            // // TODO: Remap TellReasons
+            if (reason == TellReason.Direct)
+                reason = TellReason.Friend;
 
-        encoded->Dtor(true);
-        uName->Dtor(true);
-        uMessage->Dtor(true);
+            var ok = SendTellNative(networkModule, contentId, homeWorld, uName, encoded, (ushort) reason, homeWorld);
+            if (ok == 1)
+                PrintTellNative(logModule, 33, uName, &decodedUtf8String, 0, contentId, homeWorld, 255, 0, 0);
+            else
+                Plugin.ChatGui.PrintError(Language.Chat_SendTell_Error);
+        }
+        finally
+        {
+            // try/finally, not try/catch: a throw out of the allocations propagates exactly as it
+            // did before (managed-only path, Dalamud catches it), but nothing leaks any more.
+            if (encoded != null)
+                encoded->Dtor(true);
+            if (uName != null)
+                uName->Dtor(true);
+            if (uMessage != null)
+                uMessage->Dtor(true);
+        }
     }
 
-    private static byte[] EncodeMessage(string str) {
+    // Framework.Instance()->GetNetworkModuleProxy()->NetworkModule had no guard at any level, and
+    // each level fails differently. Framework.Instance() is [StaticAddress(isPointer: true)]: the
+    // generator emits `if (ppInstance is null) throw; return *ppInstance;`, so it throws on an
+    // unresolved signature AND returns null before the game has constructed the Framework.
+    // GetNetworkModuleProxy() is [MemberFunction], so it throws on an unresolved signature of its
+    // own and can return null. NetworkModule is then a plain field read at +0x08 off that pointer.
+    // Only the throws are catchable; both null steps are access violations, so both need a check.
+    // Degradation: SendTell reports Chat_SendTell_Error to the user and sends nothing.
+    private static NetworkModule* GetNetworkModuleOrNull()
+    {
+        var framework = ResolveOrNull<Framework>(&Framework.Instance, "SendTell/framework", "Could not resolve Framework; the tell was not sent");
+        if (framework == null)
+            return null;
+
+        try
+        {
+            var proxy = framework->GetNetworkModuleProxy();
+            return proxy == null ? null : proxy->NetworkModule;
+        }
+        catch (Exception ex)
+        {
+            LogErrorThrottled("SendTell/networkModuleProxy", ex, "Could not resolve the network module proxy; the tell was not sent");
+            return null;
+        }
+    }
+
+    // Returns null when PronounModule cannot be resolved, which SendTell treats as "cannot send".
+    // Both Instance() calls here were unguarded. ProcessString is [VirtualFunction], generated as
+    // `VirtualTable->ProcessString(this, ...)`, so a null module dereferences immediately rather
+    // than throwing anything catchable. Copy is [MemberFunction] and dereferences its argument
+    // natively, hence the checks on the ProcessString results as well. Resolving once instead of
+    // twice is equivalent - both calls walked the same chain and returned the same pointer.
+    private static byte[]? EncodeMessage(string str) {
+        var pronounModule = ResolveOrNull<PronounModule>(&PronounModule.Instance, "EncodeMessage/pronounModule", "Could not resolve PronounModule; the message could not be encoded");
+        if (pronounModule == null)
+            return null;
+
         using var input = new Utf8String(str);
         using var output = new Utf8String();
 
-        input.Copy(PronounModule.Instance()->ProcessString(&input, true));
-        output.Copy(PronounModule.Instance()->ProcessString(&input, false));
+        var encoded = pronounModule->ProcessString(&input, true);
+        if (encoded == null)
+            return null;
+        input.Copy(encoded);
+
+        var processed = pronounModule->ProcessString(&input, false);
+        if (processed == null)
+            return null;
+        output.Copy(processed);
+
         return output.AsSpan().ToArray();
     }
 

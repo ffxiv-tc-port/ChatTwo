@@ -178,13 +178,32 @@ public partial class ChatLog : Window, IChatWindow
 
             if (info.Channel is InputChannel.Linkshell1 or InputChannel.CrossLinkshell1 && info.Rotate != RotateMode.None)
             {
-                var module = UIModule.Instance();
-
                 // If any of these operations fail, do nothing.
                 if (info.Permanent)
                 {
+                    // Guarding Chat.Rotate*History without guarding this would achieve nothing: the
+                    // module->LinkshellCycle reads below dereference the same pointer, so the access
+                    // violation would just move down a couple of lines. UIModule.Instance() is the
+                    // hand-written chained kind, so it needs both a try (the throw comes from
+                    // Framework.Instance() further down the chain) and a null check (the null return
+                    // is its own, and an AccessViolationException is not catchable in .NET Core);
+                    // Chat's shared helper does both. The resolve moved inside this branch because
+                    // it is the only one that dereferences the module - the non-permanent branch
+                    // calls ResolveTempInputChannel, which now resolves and guards its own.
+                    //
+                    // Degradation: targetChannel becomes null, which routes into the existing
+                    // "invalid value, ignoring" path just below - i.e. exactly the "do nothing"
+                    // intent stated above, and the same outcome as a rotation that finds no valid
+                    // linkshell. Deliberately not falling back to the unrotated channel: the user
+                    // pressed a cycle keybind, so silently selecting linkshell 1 every time would
+                    // be a wrong answer rather than no answer.
+                    var module = Chat.GetUIModuleOrNull("ChatLogActivated/uiModule", "Could not resolve UIModule; the linkshell channel was not rotated");
+                    if (module == null)
+                    {
+                        targetChannel = null;
+                    }
                     // Rotate using the game's code.
-                    if (info.Channel == InputChannel.Linkshell1)
+                    else if (info.Channel == InputChannel.Linkshell1)
                     {
                         Chat.RotateLinkshellHistory(info.Rotate);
                         targetChannel = info.Channel + (uint)module->LinkshellCycle;

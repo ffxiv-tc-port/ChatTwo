@@ -83,14 +83,26 @@ public unsafe class ChatBox
         SendMessageUnsafe(bytes);
     }
 
+    // TC: this must not call Utf8String.SanitizeString. That native function is resolved by a
+    // byte-pattern signature baked into FFXIVClientStructs, and on the TC client the scan lands on
+    // the wrong address - it does not throw at startup, it just points at garbage, so calling it
+    // crashes the game. Chat.IsCharValid was rewritten as a managed check for exactly this reason
+    // (see the note above it), but this call site was missed, leaving a live crash path:
+    // right-click a player -> add to blacklist -> GameFunctions -> ChatBox.SendMessage -> here.
+    //
+    // The only consumer compares lengths to reject messages containing characters the game would
+    // strip, so the managed check that replaced IsCharValid is the right equivalent. It is more
+    // permissive than AllowedEntities 0x27F, which means a message the game would have filtered can
+    // now reach it - the game rejects those on its own, and that is strictly better than crashing.
     private static string SanitiseText(string text)
     {
-        var uText = Utf8String.FromString(text);
+        var sanitised = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            if (!char.IsControl(c))
+                sanitised.Append(c);
+        }
 
-        uText->SanitizeString((AllowedEntities) 0x27F);
-        var sanitised = uText->ToString();
-        uText->Dtor(true);
-
-        return sanitised;
+        return sanitised.ToString();
     }
 }

@@ -302,10 +302,10 @@ public sealed unsafe class Chat : IDisposable
     private byte ChatLogRefreshDetour(nint log, ushort eventId, AtkValue* value)
     {
         if (Plugin.CurrentTab.InputDisabled)
-            return ChatLogRefreshHook!.Original(log, eventId, value);
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
 
         if (eventId != 0x31 || value == null || value->UInt is not (0x05 or 0x0C))
-            return ChatLogRefreshHook!.Original(log, eventId, value);
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
 
         if (Plugin.Functions.KeybindManager.DirectChat && LastTypedCharacter != null)
         {
@@ -378,7 +378,7 @@ public sealed unsafe class Chat : IDisposable
         }
 
         if (deferToVanilla)
-            return ChatLogRefreshHook!.Original(log, eventId, value);
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
 
         // prevent the game from focusing the chat log
         return 1;
@@ -386,7 +386,7 @@ public sealed unsafe class Chat : IDisposable
 
     private CStringPointer ChangeChannelNameDetour(AgentChatLog* agent)
     {
-        var ret = ChangeChannelNameHook!.Original(agent);
+        var ret = ChangeChannelNameHook!.OriginalDisposeSafe(agent);
         if (agent == null)
             return ret;
 
@@ -476,19 +476,19 @@ public sealed unsafe class Chat : IDisposable
         var chatLog = ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "ReplyInSelectedChatMode/agent", "Could not resolve AgentChatLog; leaving the reply channel to the game");
         if (chatLog == null)
         {
-            ReplyInSelectedChatModeHook!.Original(agent);
+            ReplyInSelectedChatModeHook!.OriginalDisposeSafe(agent);
             return;
         }
 
         var replyMode = chatLog->ReplyChannel;
         if (replyMode == -2)
         {
-            ReplyInSelectedChatModeHook!.Original(agent);
+            ReplyInSelectedChatModeHook!.OriginalDisposeSafe(agent);
             return;
         }
 
         SetChannelWithExtraChat((InputChannel) replyMode);
-        ReplyInSelectedChatModeHook!.Original(agent);
+        ReplyInSelectedChatModeHook!.OriginalDisposeSafe(agent);
     }
 
     private bool SetContextTellTarget(RaptureShellModule* a1, Utf8String* playerName, Utf8String* worldName, ushort worldId, ulong accountId, ulong contentId, ushort reason, bool setChatType)
@@ -510,7 +510,7 @@ public sealed unsafe class Chat : IDisposable
             }
         }
 
-        return SetChatLogTellTargetHook!.Original(a1, playerName, worldName, worldId, accountId, contentId, reason, setChatType);
+        return SetChatLogTellTargetHook!.OriginalDisposeSafe(a1, playerName, worldName, worldId, accountId, contentId, reason, setChatType);
     }
 
     private void ContextMenuTellInForayDetour(RaptureShellModule* a1, Utf8String* playerName, Utf8String* worldName, ushort worldId, ulong accountId, ulong contentId, ushort reason)
@@ -536,7 +536,7 @@ public sealed unsafe class Chat : IDisposable
             }
         }
 
-        ContextMenuTellInForayHook!.Original(a1, playerName, worldName, worldId, accountId, contentId, reason);
+        ContextMenuTellInForayHook!.OriginalDisposeSafe(a1, playerName, worldName, worldId, accountId, contentId, reason);
     }
 
     /// <summary>

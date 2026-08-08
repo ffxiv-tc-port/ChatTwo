@@ -283,7 +283,7 @@ public class MessageManager : IAsyncDisposable
         // so a throw from the game's own call would have been swallowed and silently turned into "this
         // message never got resolved". Our own bookkeeping below is what the try is actually for -
         // PendingSync.Last() races with the queue being drained and throws InvalidOperationException.
-        ContentIdResolverHook?.Original(agent, contentId, accountId, messageIndex, worldId, chatType);
+        ContentIdResolverHook?.OriginalDisposeSafe(agent, contentId, accountId, messageIndex, worldId, chatType);
 
         try
         {

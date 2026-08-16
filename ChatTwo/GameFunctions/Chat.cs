@@ -33,9 +33,17 @@ public sealed unsafe class Chat : IDisposable
     private readonly delegate* unmanaged<NetworkModule*, ulong, ushort, Utf8String*, Utf8String*, ushort, ushort, byte> SendTellNative = null!;
 
     // Client::UI::AddonChatLog.OnRefresh
+    //
+    // ⚠️ 第二個參數上游命名為 eventId，那是誤稱：這個函式是 AtkUnitBase 的虛擬函式 OnRefresh
+    //    （FFXIVClientStructs：[VirtualFunction(51)] bool OnRefresh(uint valueCount, AtkValue* values)），
+    //    第二個參數其實是 valueCount。這個誤稱害人推論出「簽章沒帶 valueCount，所以離線無從
+    //    得知第 3 格存不存在」的相反結論，因此改成正確的名稱。
+    //    📌 型別維持 ushort 不改：x64 下第二個整數參數在 edx，宣告成 ushort 等於取低 16 位元，
+    //       對實際會出現的 valueCount 沒有差別；改成 uint 會讓下面 `!= 0x31` 的判定變嚴格，
+    //       那是行為改動，不在本次範圍內。
     [Signature("40 53 57 41 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4D 8B F8", DetourName = nameof(ChatLogRefreshDetour))]
     private Hook<ChatLogRefreshDelegate>? ChatLogRefreshHook = null!;
-    private delegate byte ChatLogRefreshDelegate(nint log, ushort eventId, AtkValue* value);
+    private delegate byte ChatLogRefreshDelegate(nint log, ushort valueCount, AtkValue* value);
 
     // Replace with CS version later
     [Signature("48 89 5C 24 ?? 55 56 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 83 B9", DetourName = nameof(ContextMenuTellInForayDetour))]
@@ -111,6 +119,25 @@ public sealed unsafe class Chat : IDisposable
             Plugin.Log.Error(ex, $"{message} (+{state.Suppressed} suppressed since the last message)");
         else
             Plugin.Log.Error(ex, message);
+    }
+
+    // 同一套節流，但走 Information：用在「不該發生、發生了要知道」但本身不是錯誤的觀測上。
+    // Information 是刻意的——使用者跑 LogLevel 2，Debug/Verbose 收不到，等於沒寫。
+    internal static void LogInfoThrottled(string key, string message)
+    {
+        var now = DateTime.UtcNow;
+        ThrottledLogs.TryGetValue(key, out var state);
+        if (state.Last != default && now - state.Last < LogThrottleInterval)
+        {
+            ThrottledLogs[key] = (state.Last, state.Suppressed + 1);
+            return;
+        }
+
+        ThrottledLogs[key] = (now, 0);
+        if (state.Suppressed > 0)
+            Plugin.Log.Information($"{message} (+{state.Suppressed} suppressed since the last message)");
+        else
+            Plugin.Log.Information(message);
     }
 
     // Resolves a ClientStructs module while guarding BOTH of the failure modes an Instance() can
@@ -299,13 +326,14 @@ public sealed unsafe class Chat : IDisposable
         Plugin.ServerCore.SendNewLogin();
     }
 
-    private byte ChatLogRefreshDetour(nint log, ushort eventId, AtkValue* value)
+    private byte ChatLogRefreshDetour(nint log, ushort valueCount, AtkValue* value)
     {
         if (Plugin.CurrentTab.InputDisabled)
-            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, valueCount, value);
 
-        if (eventId != 0x31 || value == null || value->UInt is not (0x05 or 0x0C))
-            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
+        // 閘門維持上游原樣（valueCount 必須正好是 0x31＝49），只是名稱改對了。
+        if (valueCount != 0x31 || value == null || value->UInt is not (0x05 or 0x0C))
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, valueCount, value);
 
         if (Plugin.Functions.KeybindManager.DirectChat && LastTypedCharacter != null)
         {
@@ -337,17 +365,46 @@ public sealed unsafe class Chat : IDisposable
 
         string? addIfNotPresent = null;
 
-        // 🔴 `value + 2` 是**沒有上界的**陣列索引 —— 這個 detour 的簽章沒有帶 valueCount，所以離線
-        //    無從得知第 3 格真的存在。讀到配置外是 AccessViolationException，try/catch 攔不到，
-        //    包 try 只會看起來有防護。真正把它擋住的是上面 line 157 的 eventId/UInt 判別式：
-        //    只有 eventId==0x31 且 value[0].UInt 是 0x05/0x0C 才會走到這裡。
-        //    ⚠️ 這條假設沒有離線證據，維持上游原樣；要改必須先實機量到 valueCount。
-        var str = value + 2;
-        if (str != null && ((int) str->Type & 0xF) == (int) ValueType.String && str->String.HasValue)
+        // `value + AddIndex` 以前被標成「沒有上界的陣列索引、離線無從證明」。那個判斷建立在
+        // 「簽章沒帶 valueCount」上，而那是誤稱造成的（見上面 delegate 的註解）：第二個參數
+        // 就是 valueCount，所以上面的閘門 `valueCount != 0x31` 本身就是上界證明——
+        // 走到這裡時 valueCount 必定是 49，而 AddIndex 是 2。
+        //
+        // 台服 7.20 離線二進位佐證（特徵碼在 .text 唯一命中，位於 0x1411FD140）：
+        //   ① 這個函式是對 values[0] 做 20 路跳表分派（cmp eax,0x13 / ja），而
+        //      case 0x05 與 case 0x0C 共用同一個處理常式 0x1411FD824 —— 與上面判別式
+        //      挑的正好是同一組值。
+        //   ② 在那個處理常式裡，遊戲自己就無條件解參考 values[2]：
+        //      0x0C 分支 `lea rcx,[r15+0x20]` @0x1411FD96F、0x05 分支同樣 @0x1411FD9D5，
+        //      而且用的是同一套型別檢查（`mov eax,[rcx]` / `and al,0xF` / `cmp al,8`，
+        //      8 就是 ValueType.String）；0x05 分支還多讀了 values[3]（`[r15+0x30]`）。
+        //   ③ this 的最大存取偏移 0x5E2 落在 AddonChatLog 的 Size = 0x638 之內。
+        //   ⇒ 只要閘門成立，讀 values[2] 不會比遊戲自己的讀取更危險。
+        //
+        // 儘管如此仍補一道 fail-safe 上界：AVE 是 corrupted-state exception，try/catch 與
+        // HookSafety 都攔不到，唯一有效的防護是「解參考之前先擋」。改版哪天讓 valueCount 不
+        // 再是 49，這裡就跳過這一筆（不讀、不擲例外），而不是把整個遊戲行程帶走。
+        const int AddIndex = 2;
+        if (valueCount > AddIndex)
         {
-            var add = str->String.ToString();
-            if (add.Length > 0)
-                addIfNotPresent = add;
+            var str = value + AddIndex;
+            if (str != null && ((int) str->Type & 0xF) == (int) ValueType.String && str->String.HasValue)
+            {
+                var add = str->String.ToString();
+                if (add.Length > 0)
+                    addIfNotPresent = add;
+            }
+        }
+        else
+        {
+            // 這一行「不應該」出現：上面的閘門要求 valueCount == 0x31，而 0x31 > 2。
+            // 真的印出來就代表上面那組離線推導已經不成立，是拿實機自證取代「先請人實機量
+            // valueCount」的作法——而且是在沒有崩潰的前提下拿到這個事實。
+            LogInfoThrottled(
+                "ChatLogRefresh/valueCount",
+                $"[ChatTwo] AddonChatLog.OnRefresh 的 valueCount={valueCount}（原值），"
+                + $"小於等於 {AddIndex}，已跳過附加字串的讀取。閘門假設（valueCount==0x31）"
+                + "已不成立，請回報這一行。");
         }
 
         // fail-closed: Original is kept OUTSIDE the try. Everything this try guards is ChatTwo's own
@@ -378,7 +435,7 @@ public sealed unsafe class Chat : IDisposable
         }
 
         if (deferToVanilla)
-            return ChatLogRefreshHook!.OriginalDisposeSafe(log, eventId, value);
+            return ChatLogRefreshHook!.OriginalDisposeSafe(log, valueCount, value);
 
         // prevent the game from focusing the chat log
         return 1;

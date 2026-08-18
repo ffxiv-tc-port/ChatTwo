@@ -45,8 +45,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] public static ISeStringEvaluator Evaluator { get; private set; } = null!;
 
-    // TC note: Dalamud.Plugin.Services.IPlayerState doesn't exist at true API13 either (see
-    // PlayerStateCompat.cs) - wraps IClientState instead of a [PluginService] injection.
+    // TC note（2026-08-19 更新）：本 repo 釘的 Dalamud（dalamud-pin-v13.0.0.16）**確實有**
+    // Dalamud.Plugin.Services.IPlayerState —— 上面的 DalamudPlayerState 就是它的 [PluginService] 注入。
+    // 原本這段註解的兩個前提都不成立：①「API13 沒有 IPlayerState」是假的（已讀過
+    // Dalamud/Plugin/Services/IPlayerState.cs 確認，其註冊屬性與 IObjectTable 相同）；
+    // ②「這層 wrapper 包的是 IClientState」也不對，PlayerStateCompat 現在轉發的是
+    // Plugin.DalamudPlayerState（ContentId）與 Plugin.ObjectTable（其餘）。
+    // 這層 wrapper 留著只是為了維持 Plugin.PlayerState.* 這個既有呼叫形狀，不動全 repo 的呼叫點。
     public static Util.PlayerStateCompatAccessor PlayerState { get; } = new();
 
     public static Configuration Config = null!;

@@ -162,8 +162,10 @@ public sealed class Tabs : ISettingsTab
                     }
                 }
 
-                // TC note: IObjectTable.LocalPlayer doesn't exist at true API13 - IClientState
-                // is the pre-replacement mechanism (same rule as IGameObject.BaseId -> DataId).
+                // TC note（2026-08-19 更新）：本 repo 釘的 Dalamud（dalamud-pin-v13.0.0.16）**確實有**
+                // IObjectTable.LocalPlayer（宣告在 Dalamud/Plugin/Services/IObjectTable.cs），
+                // 下一行用的就是它。原本這段註解寫「API13 沒有 IObjectTable.LocalPlayer，要改用
+                // IClientState」，那個前提不成立 —— 程式碼本身從來沒照那句話走。
                 var player = Plugin.ObjectTable.LocalPlayer;
                 if (tab.Channel == InputChannel.Tell && player != null)
                 {

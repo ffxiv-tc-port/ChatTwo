@@ -236,9 +236,10 @@ public unsafe class GameFunctions : IDisposable
             if (atkModule == null)
                 return;
 
-            // Hand-rolled vtable dispatch: index 27 is upstream's, kept as-is because nothing offline
-            // can confirm or refute it on TC. The pointer checks below are what make a wrong index
-            // the only remaining risk instead of one of three.
+            // Hand-rolled vtable dispatch: index 27 verified against the TC executable (2026-08-19):
+            // static vtable 0x141FF3578 slot 27 is FocusAddon(uint addonId, bool focusContextMenu),
+            // pinned by neighbor slots 26 (IsAddonReady) and 28 (ClearFocus) so an off-by-one is
+            // excluded. The pointer checks below still guard a runtime-swapped vtable.
             var atkModuleVtbl = (void**) atkModule->AtkModule.VirtualTable;
             if (atkModuleVtbl == null || atkModuleVtbl[27] == null)
                 return;

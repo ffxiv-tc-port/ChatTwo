@@ -164,7 +164,7 @@ public sealed class Tabs : ISettingsTab
 
                 // TC note: IObjectTable.LocalPlayer doesn't exist at true API13 - IClientState
                 // is the pre-replacement mechanism (same rule as IGameObject.BaseId -> DataId).
-                var player = Plugin.ClientState.LocalPlayer;
+                var player = Plugin.ObjectTable.LocalPlayer;
                 if (tab.Channel == InputChannel.Tell && player != null)
                 {
                     ImGui.Checkbox(Language.Options_Tabs_SenderMessages, ref tab.AllSenderMessages);

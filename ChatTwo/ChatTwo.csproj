@@ -46,6 +46,12 @@
       <Folder Include="images\" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Include="SharedEmoteList.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
     <!--This doesn't work until Plogon is updated to include NodeJS-->
     <!--    <Target Name="NodeJS Compile" BeforeTargets="BeforeCompile">-->
     <!--        <Exec Command="npm install" WorkingDirectory="Http\Frontend"/>-->

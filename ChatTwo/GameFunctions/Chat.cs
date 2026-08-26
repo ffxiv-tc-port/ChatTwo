@@ -19,7 +19,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
 using Lumina.Text.ReadOnly;
 
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace ChatTwo.GameFunctions;
 
@@ -47,7 +47,7 @@ public sealed unsafe class Chat : IDisposable
     private readonly Hook<RaptureShellModule.Delegates.SetContextTellTarget>? SetChatLogTellTargetHook;
 
     // Pointers
-    [Signature("48 8D 1D ?? ?? ?? ?? 8B 05", ScanType = ScanType.StaticAddress)]
+    [Signature("48 8D 35 ?? ?? ?? ?? 8B 05", ScanType = ScanType.StaticAddress)]
     private readonly char* LastTypedCharacter = null!;
 
     private Plugin Plugin { get; }
@@ -541,17 +541,13 @@ public sealed unsafe class Chat : IDisposable
         return output.AsSpan().ToArray();
     }
 
-    public bool IsCharValid(char c)
-    {
-        var uC = Utf8String.FromString(c.ToString());
-
-        uC->SanitizeString((AllowedEntities) 0x27F);
-        var wasValid = uC->ToString().Length > 0;
-
-        uC->Dtor(true);
-
-        return wasValid;
-    }
+    // TC note: this used to call Utf8String.SanitizeString, a native game function
+    // resolved via a byte-pattern signature baked into FFXIVClientStructs. On the TC
+    // client that signature scan resolves to the wrong address (it doesn't throw at
+    // startup, it just points at garbage), so calling it on every keystroke crashed
+    // the game as soon as any character was typed. Replaced with a plain managed
+    // check since this is only used to filter obviously-invalid characters.
+    public bool IsCharValid(char c) => !char.IsControl(c);
 
     public static bool CheckHideFlags()
     {
@@ -559,7 +555,14 @@ public sealed unsafe class Chat : IDisposable
         // also been hidden. This prevents Chat 2 from hiding for a split
         // second before the cutscene actually starts, because the game sets
         // the cutscene conditions before processing the skip.
-        var raptureAtkUnitManager = RaptureAtkUnitManager.Instance();
-        return raptureAtkUnitManager == null || raptureAtkUnitManager->UiFlags.HasFlag(UiFlags.Chat);
+        //
+        // TC note: RaptureAtkUnitManager.UiFlags sits at FieldOffset 0x9D00 in a
+        // struct sized 0x9D18 - right at the tail end. TC runs an older client
+        // build than the FFXIVClientStructs layout this offset was measured
+        // against, and reading this field crashed the game as soon as a cutscene
+        // or event dialogue actually started (the only time this code path runs).
+        // Skip the anti-flicker optimization entirely on TC; chat just hides a
+        // frame or two earlier during cutscenes instead of crashing.
+        return true;
     }
 }

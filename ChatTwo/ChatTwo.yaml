@@ -1,20 +1,21 @@
 name: Chat 2
-author: Infi, Anna
-punchline: Electric Boogaloo - ♪ A whole new chat, a new fantastic chat window ♪
+author: Infi, Anna, Lother
+punchline: 電光石火 - ♪ 全新的聊天視窗，一個嶄新美妙的聊天窗口 ♪
 description: |-
-  Chat 2 is a complete rewrite of the in-game chat window as a plugin.
-  It supports:
+  Chat 2 是遊戲內建聊天視窗的完整重寫版外掛。
+  支援功能：
 
-  - Unlimited tabs
-  - Tabs that always send to a certain channel
-  - More flexible filtering
-  - RGB channel colouring
-  - Completely variable font size
-  - Sidebar tabs
-  - Unread counts
-  - Emotes
-  - Screenshot mode (obfuscate names)
-repo_url: https://github.com/Infiziert90/ChatTwo
+  - 無限分頁
+  - 固定發送到特定頻道的分頁
+  - 更靈活的過濾功能
+  - RGB 頻道顏色
+  - 完全可變字體大小
+  - 側邊欄分頁
+  - 未讀訊息計數
+  - 表情符號
+  - 截圖模式（隱藏名稱）
+repo_url: https://github.com/Lother/ChatTwo
+icon_url: https://raw.githubusercontent.com/Lother/DalamudPluginsTC/main/icons/ChatTwo.png
 accepts_feedback: true
 tags:
   - Social

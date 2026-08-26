@@ -1,3 +1,4 @@
+using ItemKind = Dalamud.Game.Text.SeStringHandling.Payloads.ItemPayload.ItemKind;
 using System.Text;
 using ChatTwo.Code;
 using ChatTwo.Util;
@@ -320,13 +321,13 @@ public partial class Message
                     else if (split == "<flag>")
                     {
                         var agentMap = AgentMap.Instance();
-                        if (agentMap->FlagMarkerCount == 0)
+                        if (!agentMap->IsFlagMarkerSet)
                         {
                             AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
                             continue;
                         }
 
-                        var mapCoords = agentMap->FlagMapMarkers[0];
+                        var mapCoords = agentMap->FlagMapMarker;
                         var rawX = (int)(MathF.Round(mapCoords.XFloat, 3, MidpointRounding.AwayFromZero) * 1000);
                         var rawY = (int)(MathF.Round(mapCoords.YFloat, 3, MidpointRounding.AwayFromZero) * 1000);
 

@@ -10,7 +10,7 @@ public sealed unsafe class Context
     public static void InviteToNoviceNetwork(string name, ushort world)
     {
         // can specify content id if we have it, but there's no need
-        InfoProxyNoviceNetwork.Instance()->InviteToNoviceNetwork(0, 0, world, name.ToTerminatedBytes());
+        InfoProxyNoviceNetwork.Instance()->InviteToNoviceNetwork(0, world, name);
     }
 
     public static void TryOn(uint itemId, byte stainId)

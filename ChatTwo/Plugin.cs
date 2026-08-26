@@ -13,7 +13,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Dalamud.Interface.ImGuiFileDialog;
 
 namespace ChatTwo;
@@ -35,14 +35,19 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IKeyState KeyState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] public static IPartyList PartyList { get; private set; } = null!;
-    [PluginService] public static ITargetManager TargetManager { get; private set; } = null!;
+    [PluginService] public static Dalamud.Game.ClientState.Objects.ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] public static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
     [PluginService] public static IGameConfig GameConfig { get; private set; } = null!;
     [PluginService] public static INotificationManager Notification { get; private set; } = null!;
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
-    [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
+    // TC note: no IPlayerState on TC's Dalamud - see ChatTwo/Util/PlayerStateCompat.cs. Kept as
+    // a static property (not just a static class reference) so every existing
+    // `Plugin.PlayerState.X` call site across the repo keeps compiling unchanged.
+    public static ChatTwo.Util.PlayerStateCompatAccessor PlayerState { get; } = new();
+#pragma warning disable SeStringEvaluator
     [PluginService] public static ISeStringEvaluator Evaluator { get; private set; } = null!;
+#pragma warning restore SeStringEvaluator
 
     public static Configuration Config = null!;
     public static FileDialogManager FileDialogManager { get; private set; } = null!;
@@ -260,11 +265,21 @@ public sealed class Plugin : IDalamudPlugin
     public void LanguageChanged(string langCode)
     {
         var info = Config.LanguageOverride is LanguageOverride.None
-            ? new CultureInfo(langCode)
+            ? new CultureInfo(MapDalamudLanguage(langCode))
             : new CultureInfo(Config.LanguageOverride.Code());
 
         Language.Culture = info;
     }
+
+    // TC Dalamud reports UiLanguage "tw", which CultureInfo resolves to the
+    // Twi (Ghana) language, silently falling back to English resources; map
+    // Chinese-flavoured codes onto the shipped zh satellites instead.
+    private static string MapDalamudLanguage(string langCode) => langCode switch
+    {
+        "tw" or "zh-TW" or "zh-Hant" => "zh-Hant",
+        "zh" or "zh-CN" or "zh-Hans" => "zh-Hans",
+        _ => langCode,
+    };
 
     private static readonly string[] ChatAddonNames =
     [
@@ -283,9 +298,16 @@ public sealed class Plugin : IDalamudPlugin
         if (!Config.HideChat)
             return;
 
+        // Tabs with input disabled intentionally fall back to the native chat log
+        // (see Chat.ChatLogRefreshDetour's early-return for InputDisabled tabs) so
+        // the player still has a way to type. "Interactable" here is really the
+        // addon's IsVisible flag, so if it was hidden on a previous frame it needs
+        // to be actively restored, not just left alone, or the native box stays
+        // invisible while still silently capturing/sending keystrokes.
+        var wantInteractable = CurrentTab.InputDisabled;
         foreach (var name in ChatAddonNames)
-            if (GameFunctions.GameFunctions.IsAddonInteractable(name))
-                GameFunctions.GameFunctions.SetAddonInteractable(name, false);
+            if (GameFunctions.GameFunctions.IsAddonInteractable(name) != wantInteractable)
+                GameFunctions.GameFunctions.SetAddonInteractable(name, wantInteractable);
     }
 
     public static bool InBattle => Condition[ConditionFlag.InCombat];

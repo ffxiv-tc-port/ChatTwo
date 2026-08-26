@@ -1,3 +1,4 @@
+using ItemKind = Dalamud.Game.Text.SeStringHandling.Payloads.ItemPayload.ItemKind;
 using System.Numerics;
 using ChatTwo.Code;
 using ChatTwo.GameFunctions.Types;
@@ -14,7 +15,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Lumina.Excel.Sheets;
 
 using Action = System.Action;
@@ -133,7 +134,7 @@ public sealed class PayloadHandler
 
     private void ContextFooter(bool didCustomContext, Chunk chunk)
     {
-        ImRaii.MenuDisposable menu = default;
+        ImRaii.IEndObject? menu = null;
         if (didCustomContext)
         {
             ImGui.Separator();
@@ -175,7 +176,7 @@ public sealed class PayloadHandler
             ImGui.TextUnformatted(message.Code.Type.Name());
         }
 
-        menu.Dispose();
+        menu?.Dispose();
     }
 
     private static string StringifyMessage(Message? message, bool withSender = false)
@@ -262,7 +263,7 @@ public sealed class PayloadHandler
         var y = Math.Min(maxIconSize, (int) (maxIconSize / iconRatio));
         var size = ImGuiHelpers.ScaledVector2(x, y);
 
-        ImGui.Image(icon.Handle, size);
+        ImGui.Image(icon.ImGuiHandle, size);
         ImGui.SameLine();
         ImGui.SetCursorPos(cursor + new Vector2(size.X + 4, size.Y - ImGui.GetTextLineHeightWithSpacing()));
     }
@@ -533,7 +534,7 @@ public sealed class PayloadHandler
         {
             var party = Plugin.PartyList;
             var leader = party[(int) party.PartyLeaderIndex]?.ContentId;
-            var isLeader = party.Length == 0 || Plugin.PlayerState.ContentId == leader;
+            var isLeader = party.Length == 0 || (leader != null && Plugin.PlayerState.ContentId == (ulong)leader.Value);
             var member = party.FirstOrDefault(member => member.Name.TextValue == player.PlayerName && member.World.RowId == world.RowId);
             var isInParty = member != null;
             var inInstance = GameFunctions.GameFunctions.IsInInstance();
@@ -564,10 +565,10 @@ public sealed class PayloadHandler
                 if (isInParty && member != null && (!inInstance || (inInstance && inPartyInstance)))
                 {
                     if (ImGui.Selectable(Language.Context_Promote))
-                        GameFunctions.Party.Promote(player.PlayerName, member.ContentId);
+                        GameFunctions.Party.Promote(player.PlayerName, (ulong)member.ContentId);
 
                     if (ImGui.Selectable(Language.Context_KickFromParty))
-                        GameFunctions.Party.Kick(player.PlayerName, member.ContentId);
+                        GameFunctions.Party.Kick(player.PlayerName, (ulong)member.ContentId);
                 }
             }
 

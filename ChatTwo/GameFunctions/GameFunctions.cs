@@ -1,3 +1,4 @@
+using ItemKind = Dalamud.Game.Text.SeStringHandling.Payloads.ItemPayload.ItemKind;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Dalamud.Game.ClientState.Conditions;
@@ -14,16 +15,25 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
-using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.AtkValueType;
+using ValueType = FFXIVClientStructs.FFXIV.Component.GUI.ValueType;
 
 namespace ChatTwo.GameFunctions;
 
 public unsafe class GameFunctions : IDisposable
 {
     #region Hooks
-    [Signature("E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ?? 48 8B D0 49 8D 4F", DetourName = nameof(ResolveTextCommandPlaceholderDetour))]
-    private Hook<ResolveTextCommandPlaceholderDelegate>? ResolveTextCommandPlaceholderHook = null!;
-    private delegate nint ResolveTextCommandPlaceholderDelegate(nint a1, byte* placeholderText, byte a3, byte a4);
+    // TC note: this signature resolves to the wrong address on TC. It doesn't
+    // just get called with an occasional null placeholderText (which a null
+    // check alone can't fully guard against - the crashes also arrived as a
+    // small near-null garbage pointer, which C# `== null` doesn't catch) - the
+    // detour was observed firing from completely unrelated native call sites
+    // (OnAddonSetup, OnAddonRefresh, OnAddonFinalize, even raw Framework
+    // update), which only happens when a hook is attached to the wrong
+    // function entirely. Disabled below; see ListCommand() for the
+    // placeholder-free replacement.
+    // [Signature("E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ?? 48 8B D0 49 8D 4F", DetourName = nameof(ResolveTextCommandPlaceholderDetour))]
+    // private Hook<ResolveTextCommandPlaceholderDelegate>? ResolveTextCommandPlaceholderHook = null!;
+    // private delegate nint ResolveTextCommandPlaceholderDelegate(nint a1, byte* placeholderText, byte a3, byte a4);
     #endregion
 
     private Plugin Plugin { get; }
@@ -37,18 +47,12 @@ public unsafe class GameFunctions : IDisposable
         Chat = new Chat(Plugin);
 
         Plugin.GameInteropProvider.InitializeFromAttributes(this);
-
-        ResolveTextCommandPlaceholderHook?.Enable();
     }
 
     public void Dispose()
     {
         Chat.Dispose();
         KeybindManager.Dispose();
-
-        ResolveTextCommandPlaceholderHook?.Dispose();
-
-        Marshal.FreeHGlobal(PlaceholderNamePtr);
     }
 
     public void SendFriendRequest(string name, ushort world)
@@ -74,9 +78,7 @@ public unsafe class GameFunctions : IDisposable
     private void ListCommand(string name, ushort world, string commandName)
     {
         var worldRow = Sheets.WorldSheet.GetRow(world);
-
-        ReplacementName = $"{name}@{worldRow.Name.ToString()}";
-        ChatBox.SendMessage($"/{commandName} add {Placeholder}");
+        ChatBox.SendMessage($"/{commandName} add {name}@{worldRow.Name.ToString()}");
     }
 
     private static T* GetAddon<T>(string name) where T : unmanaged
@@ -131,8 +133,9 @@ public unsafe class GameFunctions : IDisposable
         // This just probably needs to be set
         agent->AddonId = addon->Id;
 
-        // Skips early return
-        atkStage->TooltipManager.TooltipType |= 2;
+        // TC note: TC's FFXIVClientStructs AtkTooltipManager has no `TooltipType` field at
+        // all (older struct shape) - this "skips early return" bit-flag hack has no
+        // equivalent here, dropped rather than guessed at.
         addon->Show(false, 15);
     }
 
@@ -243,19 +246,4 @@ public unsafe class GameFunctions : IDisposable
         vf0(agent, &result, &value, 0, 0);
     }
 
-    private readonly nint PlaceholderNamePtr = Marshal.AllocHGlobal(128);
-    private readonly string Placeholder = $"<{Guid.NewGuid():N}>";
-    private string? ReplacementName;
-
-    private nint ResolveTextCommandPlaceholderDetour(nint a1, byte* placeholderText, byte a3, byte a4)
-    {
-        var placeholder = MemoryHelper.ReadStringNullTerminated((nint) placeholderText);
-        if (ReplacementName == null || placeholder != Placeholder)
-            return ResolveTextCommandPlaceholderHook!.Original(a1, placeholderText, a3, a4);
-
-        MemoryHelper.WriteString(PlaceholderNamePtr, ReplacementName);
-        ReplacementName = null;
-
-        return PlaceholderNamePtr;
-    }
 }

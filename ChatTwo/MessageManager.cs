@@ -4,7 +4,6 @@ using System.Text;
 using ChatTwo.Code;
 using ChatTwo.Resources;
 using ChatTwo.Util;
-using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Hooking;
@@ -80,8 +79,20 @@ public class MessageManager : IAsyncDisposable
         PendingMessageThread = new Thread(() => ProcessPendingMessages(PendingThreadCancellationToken.Token));
         PendingMessageThread.Start();
 
-        ContentIdResolverHook = Plugin.GameInteropProvider.HookFromAddress<RaptureLogModule.Delegates.AddMsgSourceEntry>(RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry, ContentIdResolver);
-        ContentIdResolverHook.Enable();
+        // TC note: RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry is
+        // resolved via a byte-pattern signature baked into FFXIVClientStructs
+        // itself. On TC that signature can resolve to the wrong address without
+        // throwing (same silent-mismatch class of bug as the SanitizeString and
+        // RaptureAtkUnitManager.UiFlags issues fixed earlier). Hooking a wrong
+        // address is worse than just reading one: it installs a detour that
+        // redirects every caller of whatever's actually at that address into
+        // this C# delegate with the wrong signature, crashing as soon as that
+        // (unrelated) native code path runs - which lines up with the crash
+        // reports coming from unrelated actions like casting a skill. Disabled
+        // on TC; this only costs us content-ID/account-ID enrichment for chat
+        // messages (used for the right-click "target player" context menu).
+        // ContentIdResolverHook = Plugin.GameInteropProvider.HookFromAddress<RaptureLogModule.Delegates.AddMsgSourceEntry>(RaptureLogModule.MemberFunctionPointers.AddMsgSourceEntry, ContentIdResolver);
+        // ContentIdResolverHook.Enable();
 
         Plugin.ChatGui.ChatMessageUnhandled += ChatMessage;
         Plugin.Framework.Update += OnFrameworkUpdate;
@@ -212,19 +223,23 @@ public class MessageManager : IAsyncDisposable
     }
 
     public (SeString? Sender, SeString? Message) LastMessage = (null, null);
-    private void ChatMessage(IChatMessage message)
+    // TC note: TC's Dalamud has no Dalamud.Game.Chat.IChatMessage abstraction (see
+    // ChatTwo/Code/XivChatRelationKind.cs for the full explanation) - ChatMessageUnhandled's
+    // old-API signature is (XivChatType, int timestamp, SeString sender, SeString message), with
+    // no source/target relation info at all, so both are always reported as LocalPlayer.
+    private void ChatMessage(XivChatType type, int timestamp, SeString sender, SeString message)
     {
-        LastMessage = (message.Sender, message.Message);
+        LastMessage = (sender, message);
 
         var pendingMessage = new PendingMessage
         {
             ContentId = 0,
             AccountId = 0,
-            LogKind = message.LogKind,
-            SourceKind = message.SourceKind,
-            TargetKind = message.TargetKind,
-            Sender = message.Sender,
-            Content = message.Message,
+            LogKind = type,
+            SourceKind = XivChatRelationKind.LocalPlayer,
+            TargetKind = XivChatRelationKind.LocalPlayer,
+            Sender = sender,
+            Content = message,
         };
 
         // Update colour codes.

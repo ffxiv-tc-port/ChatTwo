@@ -125,7 +125,7 @@
     <value>隱藏原版聊天視窗</value>
   </data>
   <data name="Options_HideChat_Description">
-    <value>當挿件處於啓動状態時隱藏遊戲内聊天視窗。</value>
+    <value>當挿件處於啟動狀態時隱藏遊戲內聊天視窗。</value>
   </data>
   <data name="Options_HideDuringCutscenes_Name">
     <value>播放過場動畫時隱藏聊天視窗</value>
@@ -146,10 +146,10 @@
     <value>在 {0} 中顯示標籤頁作為側邊欄，而不是頂部。</value>
   </data>
   <data name="Options_PrettierTimestamps_Name">
-    <value>使用現代化布局</value>
+    <value>使用現代化佈局</value>
   </data>
   <data name="Options_PrettierTimestamps_Description">
-    <value>以更現代化的樣式顯示消息。</value>
+    <value>以更現代化的樣式顯示訊息。</value>
   </data>
   <data name="Options_Use24HourClock_Name">
     <value>24小時制</value>
@@ -158,10 +158,10 @@
     <value>以24小時制顯示時間戳。</value>
   </data>
   <data name="Options_MoreCompactPretty_Name">
-    <value>更緊湊的現代布局</value>
+    <value>更緊湊的現代佈局</value>
   </data>
   <data name="Options_MoreCompactPretty_Description">
-    <value>縮小消息之間的間距。</value>
+    <value>縮小訊息之間的間距。</value>
   </data>
   <data name="Options_ShowNoviceNetwork_Name">
     <value>顯示新人頻道加入按鈕</value>
@@ -185,7 +185,7 @@
     <value>允許移動聊天視窗</value>
   </data>
   <data name="Options_CanResize_Name">
-    <value>允許調整聊天窗口大小</value>
+    <value>允許調整聊天視窗大小</value>
   </data>
   <data name="Popout_CanMove_Name">
     <value>Allow moving window</value>
@@ -317,25 +317,25 @@
     <value>他人</value>
   </data>
   <data name="ChatSource_EngagedEnemy">
-    <value>交戰状態下的敵人</value>
+    <value>交戰狀態下的敵人</value>
   </data>
   <data name="ChatSource_UnengagedEnemy">
-    <value>非交戰状態的敵人</value>
+    <value>非交戰狀態的敵人</value>
   </data>
   <data name="ChatSource_FriendlyNpc">
     <value>友好的非玩家角色</value>
   </data>
   <data name="ChatSource_SelfPet">
-    <value>召喚獸及搭档(自己)</value>
+    <value>召喚獸及搭檔(自己)</value>
   </data>
   <data name="ChatSource_PartyPet">
-    <value>召喚獸及搭档(小隊)</value>
+    <value>召喚獸及搭檔(小隊)</value>
   </data>
   <data name="ChatSource_AlliancePet">
-    <value>召喚獸及搭档(團隊)</value>
+    <value>召喚獸及搭檔(團隊)</value>
   </data>
   <data name="ChatSource_OtherPet">
-    <value>召喚獸及搭档(他人)</value>
+    <value>召喚獸及搭檔(他人)</value>
   </data>
   <data name="Options_Font_Name">
     <value>字型</value>
@@ -401,7 +401,7 @@
     <value>關於</value>
   </data>
   <data name="Options_About_Opening">
-    <value>{0} 是一個完全重新建立遊戲内聊天並使其變得更好的專案。
+    <value>{0} 是一個完全重新建立遊戲內聊天並使其變得更好的專案。
 繁體中文是為了不開補全功能也能與其他玩家正常顯示溝通所翻譯及修改。</value>
   </data>
   <data name="Options_About_CrowdIn">
@@ -507,7 +507,7 @@
     <value>登入時顯示之前的聊天會話</value>
   </data>
   <data name="Options_LoadPreviousSession_Description">
-    <value>登入後，將上次登出時的訊息填充聊天内容。</value>
+    <value>登入後，將上次登出時的訊息填充聊天內容。</value>
   </data>
   <data name="Options_Database_Tab">
     <value>資料庫</value>
@@ -516,7 +516,7 @@
     <value>在填充標籤頁時包括以前的會話</value>
   </data>
   <data name="Options_FilterIncludePreviousSessions_Description">
-    <value>填充標籤頁時包括遊戲啓動前的資訊。儲存設定時標籤頁會被填充。</value>
+    <value>填充標籤頁時包括遊戲啟動前的資訊。儲存設定時標籤頁會被填充。</value>
   </data>
   <data name="Options_Database_Advanced_Warning">
     <value>不要點選這些按鈕，除非您知道自己在做什麼。</value>
@@ -549,7 +549,7 @@
     <value>Use different hide condition than main window</value>
   </data>
   <data name="Options_FontsEnabled">
-    <value>啓用自定義字型</value>
+    <value>啟用自定義字型</value>
   </data>
   <data name="Options_ItalicEnabled">
     <value>Use italic font</value>
@@ -561,7 +561,7 @@
     <value>定型文列表排序</value>
   </data>
   <data name="Options_SortAutoTranslate_Description">
-    <value>如果啓用此選項，定型文列表將按字母順序排序。</value>
+    <value>如果啟用此選項，定型文列表將按字母順序排序。</value>
   </data>
   <data name="Options_WebinterfaceEnable_Name">
     <value>Enabled</value>
@@ -624,7 +624,7 @@
     <value>額外的字型</value>
   </data>
   <data name="Options_ExtraGlyphs_Description">
-    <value>啓用下面的複選框，可以將額外的字形新増到 {0} 的全域性字型中。這可能需要増加Dalamud字型圖集的大小。</value>
+    <value>啟用下面的核取方塊，可以將額外的字形新増到 {0} 的全域性字型中。這可能需要増加Dalamud字型圖集的大小。</value>
   </data>
   <data name="ExtraGlyphRanges_ChineseFull_Name">
     <value>中文(完整)</value>
@@ -720,7 +720,7 @@
     <value>選中</value>
   </data>
   <data name="ChatType_Debug">
-    <value>調試</value>
+    <value>除錯</value>
   </data>
   <data name="ChatType_Urgent">
     <value>緊急</value>
@@ -831,16 +831,16 @@
     <value>恢復</value>
   </data>
   <data name="ChatType_GainBuff">
-    <value>附加強化状態</value>
+    <value>附加強化狀態</value>
   </data>
   <data name="ChatType_GainDebuff">
-    <value>附加弱化状態</value>
+    <value>附加弱化狀態</value>
   </data>
   <data name="ChatType_LoseBuff">
-    <value>強化状態效果消失</value>
+    <value>強化狀態效果消失</value>
   </data>
   <data name="ChatType_LoseDebuff">
-    <value>弱化状態效果消失</value>
+    <value>弱化狀態效果消失</value>
   </data>
   <data name="ChatType_Alarm">
     <value>鬧鐘通知資訊</value>
@@ -981,16 +981,16 @@
     <value>全選</value>
   </data>
   <data name="Context_AdventurerPlate">
-    <value>查看冒險者銘牌</value>
+    <value>檢視冒險者銘牌</value>
   </data>
   <data name="Context_AdventurerPlateError">
-    <value>當前無法查看冒險者銘牌</value>
+    <value>當前無法檢視冒險者銘牌</value>
   </data>
   <data name="Options_TooltipOffset_Name">
-    <value>提示窗口偏移 </value>
+    <value>提示視窗偏移 </value>
   </data>
   <data name="Options_TooltipOffset_Desc">
-    <value>如果提示窗口被截斷, 請啟動本項</value>
+    <value>如果提示視窗被截斷, 請啟動本項</value>
   </data>
   <data name="ChatType_ExtraChatLinkshell1" xml:space="preserve">
         <value>ExtraChat 通訊貝 [1]</value>
@@ -1020,19 +1020,19 @@
     <value>復製內容</value>
   </data>
   <data name="Context_CopyContentSuccess">
-    <value>已複製消息內容至剪貼板</value>
+    <value>已複製訊息內容至剪貼簿</value>
   </data>
   <data name="Context_CopySuccess">
-    <value>已複製消息至剪貼板</value>
+    <value>已複製訊息至剪貼簿</value>
   </data>
   <data name="PartyInvite_NoId">
     <value>Unable to find ID for this message, please try another one.</value>
   </data>
   <data name="Context_CopyLink" xml:space="preserve">
-        <value>複製鏈接至剪貼板</value>
+        <value>複製連結至剪貼簿</value>
     </data>
   <data name="Context_CopyLinkNotification" xml:space="preserve">
-        <value>已複製鏈接至剪貼板</value>
+        <value>已複製連結至剪貼簿</value>
     </data>
   <data name="Context_OpenInBrowser" xml:space="preserve">
         <value>在瀏覽器中開啟連結</value>
@@ -1065,25 +1065,25 @@
         <value>用另一種 Dalamud 樣式覆蓋目前選中的樣式</value>
     </data>
   <data name="Options_HideInLoadingScreens_Name" xml:space="preserve">
-        <value>在加載畫面中隱藏</value>
+        <value>在載入畫面中隱藏</value>
     </data>
   <data name="Options_HideInLoadingScreens_Description" xml:space="preserve">
-        <value>在加載畫面中隱藏{0}。</value>
+        <value>在載入畫面中隱藏{0}。</value>
     </data>
   <data name="Options_ClearDatabase_Button">
-    <value>清楚消息歷史數據庫</value>
+    <value>清楚訊息歷史資料庫</value>
   </data>
   <data name="Options_ClearDatabase_Success">
-    <value>已成功清除聊天數據庫</value>
+    <value>已成功清除聊天資料庫</value>
   </data>
   <data name="Options_ClearDatabase_Tooltip">
-    <value>移除所有消息歷史紀錄。改選想無法還原。請同時按住 Ctrl+Shift 鍵後點擊。</value>
+    <value>移除所有訊息歷史紀錄。改選想無法還原。請同時按住 Ctrl+Shift 鍵後點選。</value>
   </data>
   <data name="Options_Database_Metadata_CopyConfigPath">
-    <value>點擊複製數據庫目錄路徑</value>
+    <value>點選複製資料庫目錄路徑</value>
   </data>
   <data name="Options_Database_Metadata_CopyConfigPathNotification">
-    <value>已複製數據庫目錄路徑至剪貼板</value>
+    <value>已複製資料庫目錄路徑至剪貼簿</value>
   </data>
   <data name="Options_Database_Metadata_Heading">
     <value>資料庫詳情：</value>
@@ -1092,7 +1092,7 @@
     <value>日誌大小：{0}</value>
   </data>
   <data name="Options_Database_Metadata_MessageCount">
-    <value>以保存的消息： {0:N0}</value>
+    <value>以儲存的訊息： {0:N0}</value>
   </data>
   <data name="Options_Database_Metadata_Path">
     <value>路徑：{0}</value>
@@ -1110,13 +1110,13 @@
         <value>播放聲音</value>
     </data>
   <data name="Options_PlaySounds_Description" xml:space="preserve">
-        <value>在交互時播放音效。</value>
+        <value>在互動時播放音效。</value>
     </data>
   <data name="Options_MaxLinesToShow_Name" xml:space="preserve">
-        <value>在聊天窗口中可顯示聊天日誌的最大數量</value>
+        <value>在聊天視窗中可顯示聊天日誌的最大數量</value>
     </data>
   <data name="Options_MaxLinesToShow_Description" xml:space="preserve">
-        <value>限制在聊天窗口種現實的日誌行數，性能可能會因此略有提高。</value>
+        <value>限制在聊天視窗種現實的日誌行數，效能可能會因此略有提高。</value>
     </data>
   <data name="Options_WebinterfaceMaxLinesToSend_Name" xml:space="preserve">
         <value>Log line limit for the webinterface</value>
@@ -1128,22 +1128,22 @@
         <value>載入聊天日誌時發生錯誤，清查勘查間日誌已獲得更多新系已報告此問題。</value>
     </data>
   <data name="Options_Database_Old_Heading" xml:space="preserve">
-        <value>就數據庫：</value>
+        <value>就資料庫：</value>
     </data>
   <data name="Options_Database_Old_Delete" xml:space="preserve">
         <value>刪除</value>
     </data>
   <data name="Options_Database_Old_Delete_Tooltip" xml:space="preserve">
-        <value>從此盤商刪除數據庫。改選想無法恢復！請同時按住 Ctrl+Shift 鍵後點擊。</value>
+        <value>從此盤商刪除資料庫。改選想無法恢復！請同時按住 Ctrl+Shift 鍵後點選。</value>
     </data>
   <data name="Options_Database_Old_Delete_Error" xml:space="preserve">
-        <value>無法善書就數據庫，從 /xllog 中獲取更多信息。</value>
+        <value>無法善書就資料庫，從 /xllog 中獲取更多資訊。</value>
     </data>
   <data name="Options_Database_Old_Delete_Success" xml:space="preserve">
-        <value>就數據庫已成功刪除。</value>
+        <value>就資料庫已成功刪除。</value>
     </data>
   <data name="Options_Database_Old_Migration" xml:space="preserve">
-        <value>打開遷移窗口</value>
+        <value>開啟遷移視窗</value>
     </data>
   <data name="Options_Tabs_NoInput" xml:space="preserve">
         <value>禁用此頻道的輸入</value>
@@ -1173,13 +1173,13 @@
         <value>顯示表情</value>
     </data>
   <data name="Options_ShowEmotes_Desc" xml:space="preserve">
-        <value>用表情替換單詞，目前支持 BetterTTV。</value>
+        <value>用表情替換單詞，目前支援 BetterTTV。</value>
     </data>
   <data name="Options_Emote_Tab" xml:space="preserve">
         <value>表情</value>
     </data>
   <data name="Options_Emote_BlockedEmotes" xml:space="preserve">
-        <value>已屏蔽的表情</value>
+        <value>已遮蔽的表情</value>
     </data>
   <data name="Options_Emote_EmoteTable" xml:space="preserve">
         <value>表情</value>
@@ -1203,7 +1203,7 @@
         <value>可用表情：</value>
     </data>
   <data name="Options_Preview_Description" xml:space="preserve">
-        <value>顯示特殊參數預覽，如表情或 &lt;item&gt;。</value>
+        <value>顯示特殊引數預覽，如表情或 &lt;item&gt;。</value>
     </data>
   <data name="Options_Preview_Name" xml:space="preserve">
         <value>位置（無 ＝ 關閉）</value>
@@ -1227,10 +1227,10 @@
         <value>提示框</value>
     </data>
   <data name="Options_PreviewOnlyIf_Name" xml:space="preserve">
-        <value>必須包含參數</value>
+        <value>必須包含引數</value>
     </data>
   <data name="Options_PreviewOnlyIf_Description" xml:space="preserve">
-        <value>只顯示包含特殊參數的文本。</value>
+        <value>只顯示包含特殊引數的文字。</value>
     </data>
   <data name="Options_PreviewMinimum_Name" xml:space="preserve">
         <value>最小輸入長度</value>
@@ -1245,10 +1245,10 @@
         <value>變更記錄</value>
     </data>
   <data name="Options_PrintChangelog_Name" xml:space="preserve">
-        <value>發送變更紀錄</value>
+        <value>傳送變更紀錄</value>
     </data>
   <data name="Options_PrintChangelog_Description" xml:space="preserve">
-        <value>在變更後想聊天窗發送變更紀錄。</value>
+        <value>在變更後想聊天窗傳送變更紀錄。</value>
     </data>
   <data name="Options_Warning_NotImplemented" xml:space="preserve">
         <value>此功能尚未實現。</value>
@@ -1323,7 +1323,7 @@
         <value>Channel</value>
     </data>
   <data name="DbViewer_TableField_Sender" xml:space="preserve">
-        <value>發送者</value>
+        <value>傳送者</value>
     </data>
   <data name="DbViewer_TableField_Content" xml:space="preserve">
         <value>內容</value>
@@ -1332,16 +1332,16 @@
         <value>未找到。</value>
     </data>
   <data name="DbViewer_Status_NoSearchResult" xml:space="preserve">
-        <value>此頁面沒有搜索結果。</value>
+        <value>此頁面沒有搜尋結果。</value>
     </data>
   <data name="DbViewer_SearcHint" xml:space="preserve">
-        <value>建議發送者或內容搜索</value>
+        <value>建議傳送者或內容搜尋</value>
     </data>
   <data name="DbViewer_Page" xml:space="preserve">
         <value>頁: {0} / {1} ({2} 行) {3}</value>
     </data>
   <data name="DbViewer_LoadingIndicator" xml:space="preserve">
-        <value>[加載中...]</value>
+        <value>[載入中...]</value>
     </data>
   <data name="DbViewer_CharacterOption" xml:space="preserve">
         <value>只顯示當前角色</value>

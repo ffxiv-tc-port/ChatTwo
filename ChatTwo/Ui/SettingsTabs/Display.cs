@@ -1,7 +1,7 @@
 using ChatTwo.Resources;
 using ChatTwo.Util;
 using Dalamud.Interface.Utility.Raii;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 
 namespace ChatTwo.Ui.SettingsTabs;
 
@@ -99,7 +99,6 @@ public sealed class Display : ISettingsTab
 
         if (Mutable.PrettierTimestamps)
         {
-            using var _ = ImRaii.PushIndent();
             ImGuiUtil.OptionCheckbox(ref Mutable.MoreCompactPretty, Language.Options_MoreCompactPretty_Name, Language.Options_MoreCompactPretty_Description);
             ImGuiUtil.OptionCheckbox(ref Mutable.HideSameTimestamps, Language.Options_HideSameTimestamps_Name, Language.Options_HideSameTimestamps_Description);
         }
@@ -108,7 +107,6 @@ public sealed class Display : ISettingsTab
         ImGuiUtil.OptionCheckbox(ref Mutable.CollapseDuplicateMessages, Language.Options_CollapseDuplicateMessages_Name, Language.Options_CollapseDuplicateMessages_Description);
         if (Mutable.CollapseDuplicateMessages)
         {
-            using var _ = ImRaii.PushIndent();
             ImGuiUtil.OptionCheckbox(ref Mutable.CollapseKeepUniqueLinks, Language.Options_CollapseDuplicateMsgUniqueLink_Name, Language.Options_CollapseDuplicateMsgUniqueLink_Description);
         }
         ImGui.Spacing();

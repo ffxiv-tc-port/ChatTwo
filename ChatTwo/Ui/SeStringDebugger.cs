@@ -1,3 +1,4 @@
+using ItemKind = Dalamud.Game.Text.SeStringHandling.Payloads.ItemPayload.ItemKind;
 ﻿using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -6,7 +7,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 using Dalamud.Utility;
 using Lumina.Text.ReadOnly;
 using DalamudPartyFinderPayload = Dalamud.Game.Text.SeStringHandling.Payloads.PartyFinderPayload;
@@ -57,7 +58,7 @@ public class SeStringDebugger : Window
         ImGui.Spacing();
         if (Plugin.MessageManager.LastMessage.Sender != null)
         {
-            ImGui.TextUnformatted($"{new ReadOnlySeString(Plugin.MessageManager.LastMessage.Sender.Encode()).ToMacroString()}");
+            ImGui.TextUnformatted($"{new ReadOnlySeString(Plugin.MessageManager.LastMessage.Sender.Encode()).ToString()}");
             ProcessPayloads(Plugin.MessageManager.LastMessage.Sender.Payloads);
         }
         else
@@ -69,7 +70,7 @@ public class SeStringDebugger : Window
         ImGui.Spacing();
         if (Plugin.MessageManager.LastMessage.Message != null)
         {
-            ImGui.TextUnformatted($"{new ReadOnlySeString(Plugin.MessageManager.LastMessage.Message.Encode()).ToMacroString()}");
+            ImGui.TextUnformatted($"{new ReadOnlySeString(Plugin.MessageManager.LastMessage.Message.Encode()).ToString()}");
             ProcessPayloads(Plugin.MessageManager.LastMessage.Message.Payloads);
         }
         else
@@ -315,7 +316,6 @@ public class SeStringDebugger : Window
 
         if (start > 0)
         {
-            using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, new Vector4(1, 1, 1, 0.5f));
             ImGui.TextWrapped(new string('_', start));
 
             ImGui.SameLine();
@@ -330,7 +330,6 @@ public class SeStringDebugger : Window
         {
             ImGui.SameLine();
 
-            using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, new Vector4(1, 1, 1, 0.5f));
             ImGui.TextWrapped(new string('_', text.Length - end));
         }
     }

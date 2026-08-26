@@ -3,7 +3,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
-using Dalamud.Bindings.ImGui;
+using ImGuiNET;
 
 namespace ChatTwo;
 
@@ -52,10 +52,10 @@ public class FontManager
     {
         ushort[] BuildRange(IReadOnlyList<ushort>? chars, params nint[] ranges)
         {
-            var builder = new ImFontGlyphRangesBuilderPtr(ImGuiNative.ImFontGlyphRangesBuilder());
+            var builder = new ImFontGlyphRangesBuilderPtr(ImGuiNative.ImFontGlyphRangesBuilder_ImFontGlyphRangesBuilder());
             // text
             foreach (var range in ranges)
-                builder.AddRanges((ushort*)range);
+                builder.AddRanges(range);
 
             // chars
             if (chars != null)

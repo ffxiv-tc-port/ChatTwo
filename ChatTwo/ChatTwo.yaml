@@ -1,5 +1,5 @@
 name: Chat 2
-author: Infi, Anna, Lother
+author: Infi, Anna
 punchline: 電光石火 - ♪ 全新的聊天視窗，一個嶄新美妙的聊天窗口 ♪
 description: |-
   Chat 2 是遊戲內建聊天視窗的完整重寫版外掛。
@@ -14,8 +14,8 @@ description: |-
   - 未讀訊息計數
   - 表情符號
   - 截圖模式（隱藏名稱）
-repo_url: https://github.com/Lother/ChatTwo
-icon_url: https://raw.githubusercontent.com/Lother/DalamudPluginsTC/main/icons/ChatTwo.png
+repo_url: https://github.com/ffxiv-tc-port/ChatTwo
+icon_url: https://raw.githubusercontent.com/ffxiv-tc-port/DalamudPluginsTC/main/icons/ChatTwo.png
 accepts_feedback: true
 tags:
   - Social

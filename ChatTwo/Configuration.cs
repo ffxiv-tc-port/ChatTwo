@@ -7,7 +7,7 @@ using Dalamud;
 using Dalamud.Configuration;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.FontIdentifier;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Lumina.Text.ReadOnly;
 
 namespace ChatTwo;

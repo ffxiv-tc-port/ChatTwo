@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
 using System.Text;
 using ChatTwo.Code;
@@ -12,7 +11,7 @@ using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.ImGuiNotification;
@@ -364,6 +363,12 @@ public class DbViewer : Window
 
     private ConcurrentStack<Message> Filter(Message[] messages)
     {
+        // TC note: `messages.Reverse()` (extension-method syntax) resolves to
+        // System.MemoryExtensions.Reverse(Span<T>) (an in-place, void-returning reverse) instead
+        // of System.Linq.Enumerable.Reverse(IEnumerable<T>) on the preview SDK/language version
+        // used to build against this Dalamud pin, since arrays implicitly convert to Span<T> and
+        // that overload is now preferred - not a Dalamud API gap. Call Enumerable.Reverse
+        // explicitly to keep the original LINQ (non-mutating) behaviour unambiguous.
         if (SimpleSearchTerm == "")
             return new ConcurrentStack<Message>(Enumerable.Reverse(messages).OrderByDescending(m => m.Date));
 

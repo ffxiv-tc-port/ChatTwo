@@ -7,7 +7,7 @@ using Dalamud.Game.Config;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using ModifierFlag = ChatTwo.GameFunctions.Types.ModifierFlag;
 
 namespace ChatTwo.GameFunctions;
@@ -465,21 +465,24 @@ public unsafe class KeybindManager : IDisposable {
         }
     }
 
-    // TC note: TC's FFXIVClientStructs has neither
-    // `FFXIVClientStructs.FFXIV.Client.System.Input.Keybind` nor
-    // `UIInputData.GetKeybindByName` at all (a newer FFXIVClientStructs addition) - there's no
-    // way to read the user's configured native keybind for a command on this client, so this
-    // always reports "unbound" instead of guessing. The channel-switch keybind interception
-    // feature this backs simply won't detect an in-game rebind of e.g. CMD_REPLY; it still
-    // works with the vanilla default bindings hardcoded elsewhere in this file.
     private static Keybind GetKeybind(string id)
-        => new()
+    {
+        var outData = new FFXIVClientStructs.FFXIV.Client.System.Input.Keybind();
+        var idString = Utf8String.FromString(id);
+        UIInputData.Instance()->GetKeybindByName(idString, &outData);
+        idString->Dtor(true);
+
+        var key1 = outData.KeySettings[0];
+        var key2 = outData.KeySettings[1];
+        return new Keybind
         {
-            Key1 = VirtualKey.NO_KEY,
-            Modifier1 = ModifierFlag.None,
-            Key2 = VirtualKey.NO_KEY,
-            Modifier2 = ModifierFlag.None,
+            Key1 = RemapInvalidVirtualKey((VirtualKey) key1.Key),
+            Modifier1 = (ModifierFlag) key1.KeyModifier,
+
+            Key2 = RemapInvalidVirtualKey((VirtualKey) key2.Key),
+            Modifier2 = (ModifierFlag) key2.KeyModifier,
         };
+    }
 
     private static VirtualKey RemapInvalidVirtualKey(VirtualKey key)
     {

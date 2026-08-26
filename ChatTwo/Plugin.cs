@@ -224,12 +224,19 @@ public sealed class Plugin : IDalamudPlugin
         TypingIpc?.Dispose();
         ExtraChat?.Dispose();
         Ipc?.Dispose();
-        MessageManager?.DisposeAsync().AsTask().Wait();
         Functions?.Dispose();
         Commands?.Dispose();
 
         EmoteCache.Dispose();
-        ServerCore?.DisposeAsync().AsTask().Wait();
+
+        // These two are independent subsystems (SQLite message store vs. web server host), so
+        // run their (each internally-bounded) async teardown in parallel instead of back-to-back
+        // to avoid stacking their worst-case wait times on the calling thread during unload.
+        Task.WaitAll(
+        [
+            MessageManager?.DisposeAsync().AsTask() ?? Task.CompletedTask,
+            ServerCore?.DisposeAsync().AsTask() ?? Task.CompletedTask,
+        ]);
     }
 
     private void Draw()

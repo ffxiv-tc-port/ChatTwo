@@ -373,6 +373,14 @@ public partial class ChatLog : Window, IChatWindow
 
     public override void PreDraw()
     {
+        // Dalamud's built-in per-window opacity (right-click title bar -> Opacity,
+        // and window presets) is applied by base.PreDraw pushing ImGuiStyleVar.Alpha.
+        // Without this call that slider silently does nothing for this window. It goes
+        // first so our own pushes below nest inside it, and base.PostDraw pops last.
+        // Note this multiplies with ChatTwo's own WindowAlpha - that is intended, they
+        // are two independent controls.
+        base.PreDraw();
+
         if (Plugin.Config.KeepInputFocus &&  InputHandler.Activate)
             ImGui.SetWindowFocus(WindowName);
 
@@ -404,6 +412,10 @@ public partial class ChatLog : Window, IChatWindow
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Pop();
+
+        // Pops the ImGuiStyleVar.Alpha that base.PreDraw pushed; must be last so the
+        // style stack unwinds in reverse order.
+        base.PostDraw();
     }
 
     public override void OnClose()

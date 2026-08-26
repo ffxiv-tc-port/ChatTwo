@@ -35,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IGameGui GameGui { get; private set; } = null!;
     [PluginService] public static IKeyState KeyState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] public static IPlayerState DalamudPlayerState { get; private set; } = null!;
     [PluginService] public static IPartyList PartyList { get; private set; } = null!;
     [PluginService] public static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
@@ -44,8 +45,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] public static ISeStringEvaluator Evaluator { get; private set; } = null!;
 
-    // TC note: Dalamud.Plugin.Services.IPlayerState doesn't exist at true API13 either (see
-    // PlayerStateCompat.cs) - wraps IClientState instead of a [PluginService] injection.
+    // TC note（2026-08-19 更新）：本 repo 釘的 Dalamud（dalamud-pin-v13.0.0.16）**確實有**
+    // Dalamud.Plugin.Services.IPlayerState —— 上面的 DalamudPlayerState 就是它的 [PluginService] 注入。
+    // 原本這段註解的兩個前提都不成立：①「API13 沒有 IPlayerState」是假的（已讀過
+    // Dalamud/Plugin/Services/IPlayerState.cs 確認，其註冊屬性與 IObjectTable 相同）；
+    // ②「這層 wrapper 包的是 IClientState」也不對，PlayerStateCompat 現在轉發的是
+    // Plugin.DalamudPlayerState（ContentId）與 Plugin.ObjectTable（其餘）。
+    // 這層 wrapper 留著只是為了維持 Plugin.PlayerState.* 這個既有呼叫形狀，不動全 repo 的呼叫點。
     public static Util.PlayerStateCompatAccessor PlayerState { get; } = new();
 
     public static Configuration Config = null!;
@@ -71,6 +77,11 @@ public sealed class Plugin : IDalamudPlugin
     public readonly ServerCore ServerCore;
 
     public int DeferredSaveFrames = -1;
+
+    // Turning a channel back on for a tab needs a re-filter to back-fill the messages that were
+    // previously excluded, but that hits SQLite on a shared connection. Coalesce bursts of
+    // toggles into a single run instead of firing one per click.
+    public int DeferredFilterFrames = -1;
 
     public DateTime GameStarted { get; }
 
@@ -300,6 +311,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (DeferredSaveFrames >= 0 && DeferredSaveFrames-- == 0)
             SaveConfig();
+
+        if (DeferredFilterFrames >= 0 && DeferredFilterFrames-- == 0)
+            MessageManager.FilterAllTabsAsync();
 
         if (!Config.HideChat)
             return;

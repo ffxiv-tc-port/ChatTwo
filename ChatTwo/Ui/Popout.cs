@@ -29,6 +29,7 @@ public class Popout : Window, IChatWindow
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
     public HideState CurrentHideState { get; set; } = HideState.None;
+    public Tab? ContextTab => Tab;
 
     public Popout(Plugin plugin, Tab tab, int idx) : base($"{tab.Name}##popout")
     {
@@ -189,6 +190,18 @@ public class Popout : Window, IChatWindow
         Plugin.WindowSystem.RemoveWindow(this);
 
         Tab.PopOut = false;
+
+        // Mirror into the settings window's snapshot so saving settings doesn't pop the window
+        // straight back out (see SettingsWindow.MirrorTabEdit) - but only for a real user close.
+        // Saving settings replaces every entry of Config.Tabs with a fresh clone and clears PopOut
+        // on the old objects, which closes this window as part of rebinding it to the new Tab
+        // instance; mirroring that churn would un-pop-out the tab on the next save. Reference
+        // identity separates the two: an orphaned Tab is no longer in the live list (Tab does not
+        // override Equals, so Contains is a reference check).
+        if (Plugin.Config.Tabs.Contains(Tab))
+            Plugin.SettingsWindow.MirrorTabEdit(Tab.Identifier, mirror => mirror.PopOut = false);
+
+        Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
         Plugin.SaveConfig();
     }
 

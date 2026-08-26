@@ -8,9 +8,34 @@ public class ChatCode
     public XivChatRelationKind Source { get; }
     public XivChatRelationKind Target { get; }
 
+    /// <summary>
+    /// The log kind lives in the low 7 bits of the game's chat code; bits 7-10 and 11-14 carry the
+    /// target's and the sender's relationship to the local player. Upstream builds against a Dalamud
+    /// that hands those three out already separated, so it takes <paramref name="type"/> as a bare
+    /// log kind. At API13 IChatGui.ChatMessageUnhandled still forwards the game's argument verbatim -
+    /// Dalamud does no masking of its own - so on this branch <paramref name="type"/> arrives as the
+    /// whole packed code (e.g. 4922, not 58) and has to be masked here. Without the mask every
+    /// message whose sender or target is not the local player got a Type that matches no entry in a
+    /// tab's SelectedChannels, so it was dropped on arrival - but the same rows read back out of the
+    /// database were narrowed to a byte on the way in, which is why they reappeared after a refill.
+    /// </summary>
+    /// <remarks>
+    /// Masking in the constructor rather than at the call site is deliberate: it also covers the
+    /// database read path (see the byte overload below). Rows written before this fix hold the packed
+    /// code in their ChatType column, and masking a value that was already truncated to a byte yields
+    /// the same log kind as masking the full code, so those rows decode correctly on load without a
+    /// migration. A value that is already a bare log kind is unaffected - every log kind is under 128.
+    /// <para>
+    /// Source and Target are deliberately left as the caller passed them. MessageManager still reports
+    /// LocalPlayer for both (see XivChatRelationKind), so the per-source filtering stays the documented
+    /// no-op it has always been on this branch; decoding the two nibbles here would start hiding
+    /// messages for anyone whose SelectedChannels entries are narrower than the full mask, and would
+    /// disagree with the zeroes already stored in every existing database row.
+    /// </para>
+    /// </remarks>
     public ChatCode(XivChatType type, XivChatRelationKind source, XivChatRelationKind target)
     {
-        Type = (ChatType)type;
+        Type = (ChatType)((ushort)type & 0x7F);
         Source = source;
         Target = target;
     }

@@ -41,6 +41,17 @@ public partial class ChatLog : Window, IChatWindow
     public bool IsHidden;
     public HideState CurrentHideState { get; set; } = HideState.None;
 
+    // Plugin.CurrentTab hands back a throwaway `new Tab()` when LastTab is out of range, so
+    // anything written through it is silently lost. Context menus need the real object or null.
+    public Tab? ContextTab
+    {
+        get
+        {
+            var idx = Plugin.LastTab;
+            return idx > -1 && idx < Plugin.Config.Tabs.Count ? Plugin.Config.Tabs[idx] : null;
+        }
+    }
+
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
 
@@ -85,6 +96,12 @@ public partial class ChatLog : Window, IChatWindow
 
     private void Logout(int _, int __)
     {
+        // Tabs are wiped on logout so the next character does not inherit this one's messages -
+        // FilterAllTabs only ever adds (AddSortPrune dedupes by Message.Id), so nothing else
+        // would take them back out. That isolation is precisely what this option turns off.
+        if (Plugin.Config.CrossCharacterMessages)
+            return;
+
         Plugin.MessageManager.ClearAllTabs();
     }
 
@@ -178,13 +195,32 @@ public partial class ChatLog : Window, IChatWindow
 
             if (info.Channel is InputChannel.Linkshell1 or InputChannel.CrossLinkshell1 && info.Rotate != RotateMode.None)
             {
-                var module = UIModule.Instance();
-
                 // If any of these operations fail, do nothing.
                 if (info.Permanent)
                 {
+                    // Guarding Chat.Rotate*History without guarding this would achieve nothing: the
+                    // module->LinkshellCycle reads below dereference the same pointer, so the access
+                    // violation would just move down a couple of lines. UIModule.Instance() is the
+                    // hand-written chained kind, so it needs both a try (the throw comes from
+                    // Framework.Instance() further down the chain) and a null check (the null return
+                    // is its own, and an AccessViolationException is not catchable in .NET Core);
+                    // Chat's shared helper does both. The resolve moved inside this branch because
+                    // it is the only one that dereferences the module - the non-permanent branch
+                    // calls ResolveTempInputChannel, which now resolves and guards its own.
+                    //
+                    // Degradation: targetChannel becomes null, which routes into the existing
+                    // "invalid value, ignoring" path just below - i.e. exactly the "do nothing"
+                    // intent stated above, and the same outcome as a rotation that finds no valid
+                    // linkshell. Deliberately not falling back to the unrotated channel: the user
+                    // pressed a cycle keybind, so silently selecting linkshell 1 every time would
+                    // be a wrong answer rather than no answer.
+                    var module = Chat.GetUIModuleOrNull("ChatLogActivated/uiModule", "Could not resolve UIModule; the linkshell channel was not rotated");
+                    if (module == null)
+                    {
+                        targetChannel = null;
+                    }
                     // Rotate using the game's code.
-                    if (info.Channel == InputChannel.Linkshell1)
+                    else if (info.Channel == InputChannel.Linkshell1)
                     {
                         Chat.RotateLinkshellHistory(info.Rotate);
                         targetChannel = info.Channel + (uint)module->LinkshellCycle;
@@ -302,12 +338,23 @@ public partial class ChatLog : Window, IChatWindow
             return true;
         }
 
+        // Equivalent to (but avoids re-scanning Plugin.Config.Tabs every single frame):
+        //   Plugin.Config.Tabs
+        //       .Where(tab => !tab.PopOut && (tab.UnhideOnActivity || tab == currentTab))
+        //       .Select(tab => tab.LastActivity)
+        //       .Append(InputHandler.LastActivityTime)
+        //       .Max();
+        // MaxUnhideEligibleTabActivity is a running max cache covering every tab except the
+        // "or == currentTab" special case, kept in sync whenever a tab's LastActivity changes
+        // or tab/PopOut/UnhideOnActivity membership changes (see its doc comment). The current
+        // tab still varies frame-to-frame, so it's checked live here, but that's an O(1) check.
         var currentTab = Plugin.CurrentTab; // local to avoid calling the getter repeatedly
-        var lastActivityTime = Plugin.Config.Tabs
-            .Where(tab => !tab.PopOut && (tab.UnhideOnActivity || tab == currentTab))
-            .Select(tab => tab.LastActivity)
-            .Append( InputHandler.LastActivityTime)
-            .Max();
+        var lastActivityTime = Plugin.Config.MaxUnhideEligibleTabActivity;
+        if (!currentTab.PopOut && currentTab.LastActivity > lastActivityTime)
+            lastActivityTime = currentTab.LastActivity;
+        if (InputHandler.LastActivityTime > lastActivityTime)
+            lastActivityTime = InputHandler.LastActivityTime;
+
         return  InputHandler.FrameTime - lastActivityTime <= 1000 * Plugin.Config.InactivityHideTimeout;
     }
 
@@ -958,14 +1005,28 @@ public partial class ChatLog : Window, IChatWindow
         var anyChanged = false;
         var tabs = Plugin.Config.Tabs;
 
+        // Everything in this menu edits the live config directly. The settings window keeps its
+        // own snapshot of the tab list and copies it back wholesale on Save, so each edit is also
+        // mirrored into that snapshot - otherwise opening settings, renaming/deleting/moving a tab
+        // here, then pressing Save would silently undo the change. Mirroring per edit (rather than
+        // resyncing the whole snapshot) preserves whatever is unsaved in the settings window.
+        // See SettingsWindow.MirrorTabEdit.
+        var identifier = tab.Identifier;
+
         ImGui.SetNextItemWidth(250f * ImGuiHelpers.GlobalScale);
         if (ImGui.InputText("##tab-name", ref tab.Name, 128))
+        {
+            var name = tab.Name;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.Name = name);
             anyChanged = true;
+        }
 
         if (ImGuiUtil.IconButton(FontAwesomeIcon.TrashAlt, tooltip: Language.ChatLog_Tabs_Delete))
         {
             tabs.RemoveAt(i);
+            Plugin.SettingsWindow.MirrorTabRemoval(identifier);
             Plugin.WantedTab = 0;
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
 
             anyChanged = true;
         }
@@ -977,7 +1038,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowLeft, Language.ChatLog_Tabs_MoveLeft);
         if (ImGuiUtil.IconButton(leftIcon, tooltip: leftTooltip) && i > 0)
         {
+            var neighbour = tabs[i - 1].Identifier;
             (tabs[i - 1], tabs[i]) = (tabs[i], tabs[i - 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -989,7 +1052,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowRight, Language.ChatLog_Tabs_MoveRight);
         if (ImGuiUtil.IconButton(rightIcon, tooltip: rightTooltip) && i < tabs.Count - 1)
         {
+            var neighbour = tabs[i + 1].Identifier;
             (tabs[i + 1], tabs[i]) = (tabs[i], tabs[i + 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -998,6 +1063,8 @@ public partial class ChatLog : Window, IChatWindow
         if (ImGuiUtil.IconButton(FontAwesomeIcon.WindowRestore, tooltip: Language.ChatLog_Tabs_PopOut))
         {
             tab.PopOut = true;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.PopOut = true);
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
             anyChanged = true;
         }
 

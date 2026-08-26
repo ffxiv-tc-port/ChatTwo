@@ -1162,6 +1162,12 @@
   <data name="Options_AdjustPosition_Warning" xml:space="preserve">
         <value>注意，此更改将立即适用且无法取消！</value>
     </data>
+  <data name="Options_InterceptKeybinds_Name" xml:space="preserve">
+        <value>拦截游戏聊天快捷键</value>
+    </data>
+  <data name="Options_InterceptKeybinds_Description" xml:space="preserve">
+        <value>按下游戏的聊天快捷键（打开聊天、回复、频道切换等）时改为聚焦 ChatTwo 的输入框。关闭后这些按键会交回游戏原生聊天输入框。</value>
+    </data>
   <data name="Options_KeepInputFocus_Name" xml:space="preserve">
         <value>保持输入焦点</value>
     </data>

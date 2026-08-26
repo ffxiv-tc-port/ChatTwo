@@ -1275,6 +1275,60 @@ namespace ChatTwo.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Stop showing "{0}" in this tab.
+        /// </summary>
+        internal static string Context_ChannelDisable {
+            get {
+                return ResourceManager.GetString("Context_ChannelDisable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to "{0}" will no longer be shown in this tab. To bring it back: Settings > Tabs > Channels..
+        /// </summary>
+        internal static string Context_ChannelDisabledNotice {
+            get {
+                return ResourceManager.GetString("Context_ChannelDisabledNotice", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages shown in this tab.
+        /// </summary>
+        internal static string Context_ChannelMenu {
+            get {
+                return ResourceManager.GetString("Context_ChannelMenu", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to GM messages are always shown, regardless of a tab's channel settings..
+        /// </summary>
+        internal static string Context_ChannelAlwaysShown {
+            get {
+                return ResourceManager.GetString("Context_ChannelAlwaysShown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ExtraChat linkshells are configured under Settings > Tabs > ExtraChat channels..
+        /// </summary>
+        internal static string Context_ChannelExtraChat {
+            get {
+                return ResourceManager.GetString("Context_ChannelExtraChat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to "{0}" is already not shown in this tab..
+        /// </summary>
+        internal static string Context_ChannelAlreadyHidden {
+            get {
+                return ResourceManager.GetString("Context_ChannelAlreadyHidden", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Integrations.
         /// </summary>
         internal static string Context_Integrations {
@@ -2905,6 +2959,24 @@ namespace ChatTwo.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Take over the game&apos;s chat keybinds (open chat, reply, channel shortcuts) and focus the ChatTwo input instead..
+        /// </summary>
+        internal static string Options_InterceptKeybinds_Description {
+            get {
+                return ResourceManager.GetString("Options_InterceptKeybinds_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Intercept game chat keybinds.
+        /// </summary>
+        internal static string Options_InterceptKeybinds_Name {
+            get {
+                return ResourceManager.GetString("Options_InterceptKeybinds_Name", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Keeps the input focus, even if you enter battle or do other actions..
         /// </summary>
         internal static string Options_KeepInputFocus_Description {
@@ -3569,7 +3641,16 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_Tabs_NoInputChannel", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to &lt;No worlds available&gt;.
+        /// </summary>
+        internal static string Options_Tabs_NoWorldsAvailable {
+            get {
+                return ResourceManager.GetString("Options_Tabs_NoWorldsAvailable", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Opacity.
         /// </summary>
@@ -4143,6 +4224,159 @@ namespace ChatTwo.Resources {
         internal static string Webinterface_UsageNotice {
             get {
                 return ResourceManager.GetString("Webinterface_UsageNotice", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show messages from all characters.
+        /// </summary>
+        internal static string Options_CrossCharacterMessages_Name {
+            get {
+                return ResourceManager.GetString("Options_CrossCharacterMessages_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Off (default): each character only sees its own messages, and every tab is cleared when you log out. On: tabs keep every character's messages, including tells that were sent to your other characters, and are not cleared on logout. The 10,000 message load limit is then shared between all characters instead of applying to each one separately..
+        /// </summary>
+        internal static string Options_CrossCharacterMessages_Description {
+            get {
+                return ResourceManager.GetString("Options_CrossCharacterMessages_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Never save messages containing.
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Name {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages matching any active rule here are never written to the message database. This is global and applies to every tab. It cannot be undone: a message that was never saved is gone, so it will not come back the next time tabs are populated, even with "Include previous sessions when populating tabs" enabled. Like the two options above, this only decides what gets stored - a matching message still shows up in your tabs for the rest of this session. Rules only apply to messages received from now on..
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Description {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hide messages containing.
+        /// </summary>
+        internal static string Options_MessageFilters_Tab_Name {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Tab_Name", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Messages matching any active rule are hidden from this tab only. Other tabs and the message database are not affected, so nothing is lost: delete a rule and save, and the messages come back. This applies to tell tabs too..
+        /// </summary>
+        internal static string Options_MessageFilters_Tab_Description {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Tab_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add rule.
+        /// </summary>
+        internal static string Options_MessageFilters_Add {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Add", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Delete this rule.
+        /// </summary>
+        internal static string Options_MessageFilters_Delete {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Delete", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Whether this rule is active. Untick to keep it around without it doing anything..
+        /// </summary>
+        internal static string Options_MessageFilters_Enabled {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Enabled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Text to look for.
+        /// </summary>
+        internal static string Options_MessageFilters_Hint {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Hint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Regex.
+        /// </summary>
+        internal static string Options_MessageFilters_Regex {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Regex", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This pattern does not compile, so the rule does nothing: {0}.
+        /// </summary>
+        internal static string Options_MessageFilters_Invalid {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Invalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This pattern uses lookaround or a backreference, so it runs on the backtracking engine with a 100 ms limit per message instead of being linear by construction. Patterns that hit the limit are ignored for that message and logged once..
+        /// </summary>
+        internal static string Options_MessageFilters_Backtracking {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Backtracking", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Rules are matched against the whole line, sender included. The separator the game puts between a name and the message is part of it, so a rule can be anchored to one speaker with ^ rather than matching that name wherever it appears..
+        /// </summary>
+        internal static string Options_MessageFilters_MatchTarget {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_MatchTarget", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A line that just arrived reads like this to a rule: {0}.
+        /// </summary>
+        internal static string Options_MessageFilters_Sample {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Sample", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No message with a sender has arrived yet, so there is no sample to show..
+        /// </summary>
+        internal static string Options_MessageFilters_SampleNone {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_SampleNone", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to There is no undo. A message discarded on arrival was never written anywhere, so deleting the rule afterwards cannot bring it back - only messages that were already in the database will reappear. If you are not sure a rule is right, try it in a tab's own list first..
+        /// </summary>
+        internal static string Options_MessageFilters_Database_Warning {
+            get {
+                return ResourceManager.GetString("Options_MessageFilters_Database_Warning", resourceCulture);
             }
         }
     }

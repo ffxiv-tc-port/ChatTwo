@@ -162,9 +162,11 @@ public sealed class Tabs : ISettingsTab
                     }
                 }
 
-                // TC note: IObjectTable.LocalPlayer doesn't exist at true API13 - IClientState
-                // is the pre-replacement mechanism (same rule as IGameObject.BaseId -> DataId).
-                var player = Plugin.ClientState.LocalPlayer;
+                // TC note（2026-08-19 更新）：本 repo 釘的 Dalamud（dalamud-pin-v13.0.0.16）**確實有**
+                // IObjectTable.LocalPlayer（宣告在 Dalamud/Plugin/Services/IObjectTable.cs），
+                // 下一行用的就是它。原本這段註解寫「API13 沒有 IObjectTable.LocalPlayer，要改用
+                // IClientState」，那個前提不成立 —— 程式碼本身從來沒照那句話走。
+                var player = Plugin.ObjectTable.LocalPlayer;
                 if (tab.Channel == InputChannel.Tell && player != null)
                 {
                     ImGui.Checkbox(Language.Options_Tabs_SenderMessages, ref tab.AllSenderMessages);
@@ -183,27 +185,38 @@ public sealed class Tabs : ISettingsTab
 
                         ImGui.SameLine();
 
-                        var selectedWorld = worlds.FindIndex(world => world.RowId == tab.TellTarget.World);
-                        if (selectedWorld == -1)
-                            selectedWorld = 0;
-
-                        using (var combo = ImRaii.Combo("###player-world", worlds[selectedWorld].Name.ToString()))
+                        // TC note: worlds 有可能是空集合(查詢異常、資料來源缺漏等),
+                        // 空集合上直接索引 worlds[0] 或呼叫 .First() 會丟例外,
+                        // 而這段程式碼在密語分頁被畫的時候每幀都會執行,一旦丟例外就是每幀當機。
+                        if (worlds.Count == 0)
                         {
-                            if (combo.Success)
-                            {
-                                var lastDc = worlds.First().DataCenter.RowId;
-                                foreach (var (idx, world) in worlds.Index())
-                                {
-                                    if (lastDc != world.DataCenter.RowId)
-                                    {
-                                        lastDc = world.DataCenter.RowId;
-                                        ImGui.Separator();
-                                    }
+                            using var _ = ImRaii.Disabled();
+                            using var combo = ImRaii.Combo("###player-world", Language.Options_Tabs_NoWorldsAvailable);
+                        }
+                        else
+                        {
+                            var selectedWorld = worlds.FindIndex(world => world.RowId == tab.TellTarget.World);
+                            if (selectedWorld == -1)
+                                selectedWorld = 0;
 
-                                    if (ImGui.Selectable(world.Name.ToString(), selectedWorld == idx))
+                            using (var combo = ImRaii.Combo("###player-world", worlds[selectedWorld].Name.ToString()))
+                            {
+                                if (combo.Success)
+                                {
+                                    var lastDc = worlds.First().DataCenter.RowId;
+                                    foreach (var (idx, world) in worlds.Index())
                                     {
-                                        selectedWorld = idx;
-                                        tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        if (lastDc != world.DataCenter.RowId)
+                                        {
+                                            lastDc = world.DataCenter.RowId;
+                                            ImGui.Separator();
+                                        }
+
+                                        if (ImGui.Selectable(world.Name.ToString(), selectedWorld == idx))
+                                        {
+                                            selectedWorld = idx;
+                                            tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        }
                                     }
                                 }
                             }
@@ -221,6 +234,8 @@ public sealed class Tabs : ISettingsTab
                     }
                 }
             }
+
+            ImGuiUtil.MessageFilterEditor("tab-filters", Language.Options_MessageFilters_Tab_Name, Language.Options_MessageFilters_Tab_Description, tab.MessageFilters);
 
             using var disabled = ImRaii.Disabled(tab.Channel == InputChannel.Tell);
             ImGuiUtil.ChannelSelector(Language.Options_Tabs_Channels, tab.SelectedChannels);

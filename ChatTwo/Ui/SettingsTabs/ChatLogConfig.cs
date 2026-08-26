@@ -23,6 +23,9 @@ public sealed class ChatLogConfig : ISettingsTab
     {
         using (ImRaii.TextWrapPos(0.0f))
         {
+            ImGuiUtil.OptionCheckbox(ref Mutable.InterceptKeybinds, Language.Options_InterceptKeybinds_Name, Language.Options_InterceptKeybinds_Description);
+            ImGui.Spacing();
+
             ImGuiUtil.OptionCheckbox(ref Mutable.KeepInputFocus, Language.Options_KeepInputFocus_Name, Language.Options_KeepInputFocus_Description);
             ImGui.Spacing();
 

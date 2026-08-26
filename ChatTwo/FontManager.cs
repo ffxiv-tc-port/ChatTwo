@@ -4,6 +4,7 @@ using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
+using System.Text.Unicode;
 
 namespace ChatTwo;
 
@@ -22,6 +23,7 @@ public class FontManager
     public byte[] GameSymFont = [];
 
     private ushort[] Ranges = [];
+    private ushort[] TcRange = [];
     private ushort[] JpRange = [];
 
     public static readonly HashSet<float> AxisFontSizeList =
@@ -107,6 +109,15 @@ public class FontManager
                 ranges.Add(extraRange.Range());
 
         Ranges = BuildRange(null, ranges.ToArray());
+        // GlyphRangesJapanese only covers the JIS kanji subset, so traditional Chinese characters
+        // outside it never make it into the atlas and render as blanks. zh-TW pulls in the full
+        // CJK Unified Ideographs block (plus Extension A) to cover them.
+        TcRange = default(FluentGlyphRangeBuilder)
+            .WithLanguage("zh-TW")
+            .With(
+                UnicodeRanges.CjkSymbolsandPunctuation,
+                UnicodeRanges.HalfwidthandFullwidthForms)
+            .BuildExact();
         JpRange = BuildRange(GlyphRangesJapanese.GlyphRanges);
     }
 
@@ -134,6 +145,9 @@ public class FontManager
                     config.MergeFont = Plugin.Config.GlobalFontV2.FontId.AddToBuildToolkit(tk, config);
 
                     config.SizePt = Plugin.Config.JapaneseFontV2.SizePt;
+                    config.GlyphRanges = TcRange;
+                    Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
+
                     config.GlyphRanges = JpRange;
                     Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
 
@@ -154,6 +168,9 @@ public class FontManager
                         config.MergeFont = Plugin.Config.ItalicFontV2.FontId.AddToBuildToolkit(tk, config);
 
                         config.SizePt = Plugin.Config.JapaneseFontV2.SizePt;
+                        config.GlyphRanges = TcRange;
+                        Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
+
                         config.GlyphRanges = JpRange;
                         Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
 

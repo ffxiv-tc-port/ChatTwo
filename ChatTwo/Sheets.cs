@@ -35,9 +35,20 @@ public static class Sheets
         TerritorySheet.TryGetRow(Plugin.ClientState.TerritoryType, out var row) &&
         row.TerritoryIntendedUse.RowId is 41 or 61;
 
+    // TC note: 台服(繁中服)DataCenter=151(陸行鳥)底下的世界,World.IsPublic 官方資料
+    // 就是全部填 false(不是遺漏),單純用 IsPublic 篩選會讓密語分頁的世界下拉選單
+    // 在台服變成空集合。這裡額外放行正式的 8 個台服世界(4028 伊弗利特 ~ 4035 泰坦),
+    // 同一個 DataCenter 底下還有測試/內部伺服器(4000-4002、402x/403x 系列)要排除掉,
+    // 所以用固定的 rowid 範圍而不是整個 DataCenter 一起放行。
+    private const uint TaiwanFirstWorldId = 4028;
+    private const uint TaiwanLastWorldId = 4035;
+
+    private static bool IsPublicOrTaiwan(World world) =>
+        world.IsPublic || world.RowId is >= TaiwanFirstWorldId and <= TaiwanLastWorldId;
+
     public static IEnumerable<World> WorldsOnDatacenter(IPlayerCharacter character)
     {
         var dcRow = character.HomeWorld.Value.DataCenter.Value.Region;
-        return WorldSheet.Where(world => world.IsPublic && world.DataCenter.Value.Region == dcRow);
+        return WorldSheet.Where(world => IsPublicOrTaiwan(world) && world.DataCenter.Value.Region == dcRow);
     }
 }

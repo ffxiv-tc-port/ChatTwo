@@ -51,6 +51,17 @@ public sealed class Database : ISettingsTab
                 Mutable.LoadPreviousSession = false;
 
         ImGui.Spacing();
+
+        // Saving the settings window always runs ClearAllTabs + FilterAllTabsAsync, so both
+        // directions of this toggle are applied correctly without any extra handling here:
+        // turning it on back-fills the other characters, turning it off drops them again.
+        ImGuiUtil.OptionCheckbox(ref Mutable.CrossCharacterMessages, Language.Options_CrossCharacterMessages_Name, Language.Options_CrossCharacterMessages_Description);
+
+        ImGui.Spacing();
+
+        ImGuiUtil.MessageFilterEditor("db-filters", Language.Options_MessageFilters_Database_Name, Language.Options_MessageFilters_Database_Description, Mutable.DatabaseMessageFilters, Language.Options_MessageFilters_Database_Warning);
+
+        ImGui.Spacing();
         ImGui.Separator();
         ImGui.Spacing();
 

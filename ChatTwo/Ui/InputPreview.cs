@@ -89,6 +89,7 @@ public partial class InputPreview : Window
 
     public override void PreDraw()
     {
+        base.PreDraw();
         var pos = InputHandler.MainWindow.LastWindowPos;
         var size = InputHandler.MainWindow.LastWindowSize;
 

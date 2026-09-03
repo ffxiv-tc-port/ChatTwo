@@ -96,8 +96,9 @@ public sealed unsafe class Chat : IDisposable
     // on the main thread (game detours plus ImGui draw callbacks), so no locking is needed. A
     // module- or signature-resolution failure is permanent for the rest of the session, so an
     // unthrottled Error would repeat on every channel change and every send for as long as the game
-    // is running. Error level is deliberate: users run LogLevel 2, so Debug/Verbose would never
-    // reach them, and this is exactly the sort of thing we want reported back.
+    // is running. Error level is deliberate: users run LogLevel 1, so Verbose never reaches
+    // them and Debug drowns in the 100k+ Debug lines a single log file holds, and this is
+    // exactly the sort of thing we want reported back.
     private static readonly TimeSpan LogThrottleInterval = TimeSpan.FromSeconds(30);
     private static readonly Dictionary<string, (DateTime Last, int Suppressed)> ThrottledLogs = new();
 
@@ -122,7 +123,7 @@ public sealed unsafe class Chat : IDisposable
     }
 
     // 同一套節流，但走 Information：用在「不該發生、發生了要知道」但本身不是錯誤的觀測上。
-    // Information 是刻意的——使用者跑 LogLevel 2，Debug/Verbose 收不到，等於沒寫。
+    // Information 是刻意的——使用者跑 LogLevel 1，盲區只有 Verbose,Debug 寫了也會被單檔數十萬行淹沒。
     internal static void LogInfoThrottled(string key, string message)
     {
         var now = DateTime.UtcNow;

@@ -63,7 +63,7 @@ public class MessageFilter
         catch (RegexMatchTimeoutException)
         {
             // Only reachable on the backtracking fallback path. Information level because the
-            // user is the one who has to fix the pattern, and they run at LogLevel 2.
+            // user is the one who has to fix the pattern, and they run at LogLevel 1 (Debug is captured, but drowned by 100k+ Debug lines per log file).
             //
             // Null-conditional on purpose: Plugin.Log is an injected static declared `= null!`,
             // so it is genuinely null before the services land and after disposal. A pattern

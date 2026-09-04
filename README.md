@@ -1,34 +1,27 @@
 ﻿# Chat 2
-#### Electric Boogaloo - ♪ A whole new chat, a new fantastic chat window ♪
 
-Chat 2 is a complete rewrite of the in-game chat window as a plugin.
-It supports:
+完整重寫遊戲內建聊天視窗的插件。
 
-- Unlimited tabs
-- Tabs that always send to a certain channel
-- More flexible filtering
-- RGB channel colouring
-- Completely variable font size
-- Sidebar tabs
-- Unread counts
-- Emotes
-- Screenshot mode (obfuscate names)
+## 功能
 
----
+- 無限制的分頁數量，可讓分頁固定發送到指定頻道
+- 更彈性的訊息過濾條件
+- 頻道文字顏色可自訂 RGB
+- 字型大小可自由調整
+- 側邊欄分頁樣式
+- 未讀訊息計數
+- 表情符號支援
+- 截圖模式（隱藏玩家名稱）
+- 聊天記錄存進本機資料庫：可跨登入保留歷史訊息、可設定是否收錄戰鬥／製作採集訊息、可合併顯示同帳號各角色的訊息
+- 網頁介面：可透過瀏覽器讀取聊天內容（預設關閉，需自行啟用）
+- IPC：其他插件可將功能整合進 Chat 2 的右鍵選單，詳見 `ipc.md`
 
-### Chat Window
-![chatWindow.png](ChatTwo/images/chatWindow.png)
+## 安裝
 
-### With SimpleTweaks "Chat Name Colors"
-![withSimpleTweaks.png](ChatTwo/images/withSimpleTweaks.png)
+在 Dalamud 設定的「自訂插件庫」加入
+`https://raw.githubusercontent.com/ffxiv-tc-port/DalamudPluginsTC/main/repo.json`
+並啟用，再從插件列表安裝。
 
----
+## 致謝
 
-### IPC Integration
-Other plugins can easily integrate their functionality into the context menu of chat2
-For more infos read [IPC Guide](ipc.md)
-
----
-
-### Thanks to
-The original dev Anna~
+原作者 Anna～

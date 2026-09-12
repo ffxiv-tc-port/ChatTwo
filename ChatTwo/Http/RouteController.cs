@@ -181,6 +181,21 @@ public class RouteController
             return;
         }
 
+        // 🔴🔴 這個處理常式跑在 HTTP 伺服器的執行緒上（不是 framework 執行緒），而
+        //    RunOnFrameworkThread 在 Framework.IsFrameworkUnloading 為真時不排隊、
+        //    會就地在這條執行緒上執行委派（本 pin Dalamud/Game/Framework.cs）。
+        //    SendWithoutContext 會走進遊戲的聊天送出路徑（原生記憶體＋遊戲函式），
+        //    卸載期正是那些結構被拆掉的時候。失敗形式是 AccessViolationException，
+        //    那在 .NET Core 是 corrupted-state exception，try/catch 攔不到，
+        //    使用者看到的是遊戲直接關掉。
+        // 🔑 回 503 而不是假裝成功：訊息確實沒有送出去，網頁端該知道。
+        if (FrameworkUnloadGuard.ShouldSkip("網頁介面送出聊天訊息"))
+        {
+            ctx.Response.StatusCode = 503;
+            await ctx.Response.Send(JsonConvert.SerializeObject(new ErrorResponse("The game is shutting down, the message was not sent.")));
+            return;
+        }
+
         await Plugin.Framework.RunOnFrameworkThread(() => { HostContext.Core.SendHandler.SendWithoutContext(content.Message); });
 
         ctx.Response.StatusCode = 201;
@@ -197,6 +212,15 @@ public class RouteController
         {
             ctx.Response.StatusCode = 400;
             await ctx.Response.Send(JsonConvert.SerializeObject(new ErrorResponse("Invalid channel received.")));
+            return;
+        }
+
+        // 🔴🔴 同上：SetChannelWithExtraChat 會改遊戲聊天框目前的頻道（原生），
+        //    而卸載期的 RunOnFrameworkThread 會就地在 HTTP 執行緒上跑它。
+        if (FrameworkUnloadGuard.ShouldSkip("網頁介面切換聊天頻道"))
+        {
+            ctx.Response.StatusCode = 503;
+            await ctx.Response.Send(JsonConvert.SerializeObject(new ErrorResponse("The game is shutting down, the channel was not switched.")));
             return;
         }
 

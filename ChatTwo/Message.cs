@@ -1,9 +1,11 @@
+using System.Numerics;
 using System.Text;
 using ChatTwo.Code;
 using ChatTwo.Util;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using System.Text.RegularExpressions;
+using ChatTwo.GameFunctions;
 using ChatTwo.GameFunctions.Types;
 using Dalamud.Game.Text;
 using Dalamud.Utility;
@@ -33,6 +35,29 @@ public partial class Message
     public int Hash { get; }
     public Dictionary<Guid, float?> Height { get; } = new();
     public Dictionary<Guid, bool> IsVisible { get; } = new();
+
+    // Draw thread only, like Height and IsVisible.
+    private MessageTimestamp? CachedTimestamp;
+
+    public MessageTimestamp TimestampFor(DateTimeOffset localTime, bool use24HourClock)
+        => CachedTimestamp = MessageTimestamp.For(CachedTimestamp, localTime, use24HourClock);
+
+    // Draw thread only. Per tab, the layout the Height of a collapsed group's first message was measured under;
+    // a message that heads no group has no entry.
+    private Dictionary<Guid, RowLayout>? RowLayouts;
+
+    public bool HasRowLayout(Guid tab) => RowLayouts?.ContainsKey(tab) == true;
+
+    public bool HeightMeasuredUnder(Guid tab, in RowLayout layout)
+        => RowLayouts != null && RowLayouts.TryGetValue(tab, out var measured) && measured == layout;
+
+    public void SetRowLayout(Guid tab, in RowLayout layout)
+    {
+        if (layout.GroupSize > 1 && layout.Side != 0)
+            (RowLayouts ??= new())[tab] = layout;
+        else
+            RowLayouts?.Remove(tab);
+    }
 
     public Message(ulong receiver, ulong contentId, ulong accountId, ChatCode code, List<Chunk> sender, List<Chunk> content, SeString senderSource, SeString contentSource)
     {
@@ -153,6 +178,14 @@ public partial class Message
 
         var nextIsAutoTranslate = false;
         var checkForEmotes = (Code.IsPlayerMessage() || extraChatChannel != Guid.Empty) && Plugin.Config.ShowEmotes;
+        var longest = 0;
+        foreach (var chunk in oldChunks)
+            if (chunk is TextChunk { Content.Length: var length } && length > longest)
+                longest = length;
+
+        Span<Tokenizer.TokenSpan> tokens = longest < 256 ? stackalloc Tokenizer.TokenSpan[longest + 1] : new Tokenizer.TokenSpan[longest + 1];
+        StringBuilder? wordBuilder = null;
+        StringBuilder? sentenceBuilder = null;
         foreach (var chunk in oldChunks)
         {
             // Use as is if it's not a text chunk, it already has a payload, or is auto translate
@@ -166,45 +199,54 @@ public partial class Message
                 continue;
             }
 
-            var wordBuilder = new StringBuilder();
-            var sentenceBuilder = new StringBuilder();
-            foreach (var token in Tokenizer.PrecedenceBasedRegexTokenizer.Tokenize(text.Content))
+            // The word is kept in its builder rather than turned into a string at every token: a string is only
+            // needed when it turns out to be an emote, and most lines (every line without emotes) never have one.
+            var content = text.Content;
+            wordBuilder ??= new StringBuilder();
+            sentenceBuilder ??= new StringBuilder(longest);
+            wordBuilder.Clear();
+            sentenceBuilder.Clear();
+            var count = Tokenizer.PrecedenceBasedRegexTokenizer.Tokenize(content, tokens);
+            foreach (var token in tokens[..count])
             {
                 if (token.TokenType == Tokenizer.TokenType.StringValue)
                 {
-                    wordBuilder.Append(token.Value);
+                    wordBuilder.Append(content, token.Start, token.Length);
                     continue;
                 }
-
-                var word = wordBuilder.ToString();
-                wordBuilder.Clear();
-
 
                 var wordUsed = false;
                 var tokenUsed = false;
 
-                if (checkForEmotes && EmoteCache.Exists(word) && !Plugin.Config.BlockedEmotes.Contains(word))
+                if (checkForEmotes && EmoteCache.Exists(wordBuilder))
                 {
-                    // Add the previous sentence before adding the emote
-                    AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.ToString()));
-                    AddChunkWithMessage(new TextChunk(chunk.Source, EmotePayload.ResolveEmote(word), word) { FallbackColor = text.FallbackColor });
+                    var word = wordBuilder.ToString();
+                    if (!Plugin.Config.BlockedEmotes.Contains(word))
+                    {
+                        // Add the previous sentence before adding the emote
+                        AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.ToString()));
+                        AddChunkWithMessage(new TextChunk(chunk.Source, EmotePayload.ResolveEmote(word), word) { FallbackColor = text.FallbackColor });
 
-                    wordUsed = true;
-                    sentenceBuilder.Clear();
+                        wordUsed = true;
+                        sentenceBuilder.Clear();
+                    }
                 }
 
                 if (token.TokenType == Tokenizer.TokenType.UrlString)
                 {
                     // Add the previous sentence before adding the url
-                    AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, sentenceBuilder.Append(!wordUsed ? word : "").ToString()));
+                    if (!wordUsed)
+                        sentenceBuilder.Append(wordBuilder);
+                    AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, sentenceBuilder.ToString()));
+                    var url = content.Substring(token.Start, token.Length);
                     try
                     {
-                        AddChunkWithMessage(text.NewWithStyle(chunk.Source, UriPayload.ResolveUri(token.Value), token.Value));
+                        AddChunkWithMessage(text.NewWithStyle(chunk.Source, UriPayload.ResolveUri(url), url));
                     }
                     catch (UriFormatException)
                     {
-                        AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, token.Value));
-                        Plugin.Log.Debug($"Invalid URL accepted by Regex but failed URI parsing: '{token.Value}'");
+                        AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, url));
+                        Plugin.Log.Debug($"Invalid URL accepted by Regex but failed URI parsing: '{url}'");
                     }
 
                     wordUsed = true;
@@ -212,16 +254,20 @@ public partial class Message
                     sentenceBuilder.Clear();
                 }
 
+                if (!wordUsed)
+                    sentenceBuilder.Append(wordBuilder);
+                wordBuilder.Clear();
+
                 // Append match if we haven't reached end of string yet
                 if (token.TokenType != Tokenizer.TokenType.SequenceTerminator)
                 {
-                    sentenceBuilder.Append(!wordUsed ? word : "");
-                    sentenceBuilder.Append(!tokenUsed ? token.Value : "");
+                    if (!tokenUsed)
+                        sentenceBuilder.Append(content, token.Start, token.Length);
                     continue;
                 }
 
-                // End of string reached, we add our leftover
-                AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.Append(!wordUsed ? word : "").ToString()));
+                // End of string reached, we add our leftover. Nothing split off means the leftover is the whole text.
+                AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.Equals(content.AsSpan()) ? content : sentenceBuilder.ToString()));
             }
         }
 
@@ -269,11 +315,22 @@ public partial class Message
                 }
 
                 nextIsMatch = false;
+                // The surrounding try covers the *throw* half of these three Instance() calls; the null half it
+                // cannot cover (a null dereference is an uncatchable AccessViolationException), so the resolves
+                // go through Chat.ResolveOrNull, which also logs the throw once per 30s with a useful key.
+                // Degradation for all three: the <item>/<status>/<flag> placeholder is emitted as literal text,
+                // which is what the catch below and the "no item linked" / "no flag set" branches already do.
                 try
                 {
                     if (split == "<item>")
                     {
-                        var agentChat = AgentChatLog.Instance();
+                        var agentChat = Chat.ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Message/linkedItem", "Could not resolve AgentChatLog; <item> was left as literal text");
+                        if (agentChat == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
                         var item = agentChat->LinkedItem;
 
                         if (item.ItemId == 0)
@@ -299,7 +356,14 @@ public partial class Message
                     }
                     else if (split == "<status>")
                     {
-                        var statusId = AgentChatLog.Instance()->ContextStatusId;
+                        var agentChat = Chat.ResolveOrNull<AgentChatLog>(&AgentChatLog.Instance, "Message/contextStatus", "Could not resolve AgentChatLog; <status> was left as literal text");
+                        if (agentChat == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
+                        var statusId = agentChat->ContextStatusId;
                         if (statusId == 0 || !Sheets.StatusSheet.TryGetRow(statusId, out var statusRow))
                         {
                             AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
@@ -319,7 +383,13 @@ public partial class Message
                     }
                     else if (split == "<flag>")
                     {
-                        var agentMap = AgentMap.Instance();
+                        var agentMap = Chat.ResolveOrNull<AgentMap>(&AgentMap.Instance, "Message/flagMarker", "Could not resolve AgentMap; <flag> was left as literal text");
+                        if (agentMap == null)
+                        {
+                            AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
+                            continue;
+                        }
+
                         if (agentMap->FlagMarkerCount == 0)
                         {
                             AddChunkWithMessage(text.NewWithStyle(chunk.Source, chunk.Link, split));
@@ -349,3 +419,11 @@ public partial class Message
     [GeneratedRegex("(<item>|<flag>|<status>)")]
     private static partial Regex TextParamRegex();
 }
+
+/// <summary>
+/// What the height of a collapsed group's row depends on besides the message: the group size (its " (Nx)" is part
+/// of the row), the width it wraps in, the timestamp it starts with when timestamps have no column of their own, the
+/// font and scale, whether player names are hidden or emotes shown, whether icons can be drawn yet, and which side of
+/// the screen's top edge the row lies on (1 below, -1 above, 0 across: never kept).
+/// </summary>
+public readonly record struct RowLayout(int GroupSize, float Width, string? Stamp, Vector2 FontProbe, float Scale, bool ScreenshotMode, bool ShowEmotes, bool IconsReady, int Side);

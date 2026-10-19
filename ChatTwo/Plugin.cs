@@ -9,6 +9,7 @@ using ChatTwo.Ui;
 using ChatTwo.Ui.ChatLog;
 using ChatTwo.Util;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -34,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IGameGui GameGui { get; private set; } = null!;
     [PluginService] public static IKeyState KeyState { get; private set; } = null!;
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] public static IPlayerState DalamudPlayerState { get; private set; } = null!;
     [PluginService] public static IPartyList PartyList { get; private set; } = null!;
     [PluginService] public static ITargetManager TargetManager { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
@@ -41,8 +43,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] public static IGameConfig GameConfig { get; private set; } = null!;
     [PluginService] public static INotificationManager Notification { get; private set; } = null!;
     [PluginService] public static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
-    [PluginService] public static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] public static ISeStringEvaluator Evaluator { get; private set; } = null!;
+
+    // TC note：本 repo 釘的 Dalamud **有** Dalamud.Plugin.Services.IPlayerState ——
+    // 上面的 DalamudPlayerState 就是它的 [PluginService] 注入。PlayerStateCompat 轉發的是
+    // Plugin.DalamudPlayerState（ContentId）與 Plugin.ObjectTable（其餘）；
+    // 這層 wrapper 留著只是為了維持 Plugin.PlayerState.* 這個既有呼叫形狀，不動全 repo 的呼叫點。
+    public static Util.PlayerStateCompatAccessor PlayerState { get; } = new();
 
     public static Configuration Config = null!;
     public static FileDialogManager FileDialogManager { get; private set; } = null!;
@@ -67,6 +74,11 @@ public sealed class Plugin : IDalamudPlugin
     public readonly ServerCore ServerCore;
 
     public int DeferredSaveFrames = -1;
+
+    // Turning a channel back on for a tab needs a re-filter to back-fill the messages that were
+    // previously excluded, but that hits SQLite on a shared connection. Coalesce bursts of
+    // toggles into a single run instead of firing one per click.
+    public int DeferredFilterFrames = -1;
 
     public DateTime GameStarted { get; }
 
@@ -206,6 +218,12 @@ public sealed class Plugin : IDalamudPlugin
         Interface.LanguageChanged -= LanguageChanged;
         Interface.UiBuilder.Draw -= Draw;
         Framework.Update -= FrameworkUpdate;
+
+        // IPC 註銷／退訂放在會碰原生或視窗的步驟之前：那些步驟擲例外時，留在 CallGate 上的委派會釘住整個舊版本。
+        TypingIpc?.Dispose();
+        ExtraChat?.Dispose();
+        Ipc?.Dispose();
+
         GameFunctions.GameFunctions.SetChatInteractable(true);
 
         WindowSystem?.RemoveAllWindows();
@@ -216,15 +234,19 @@ public sealed class Plugin : IDalamudPlugin
         DebuggerWindow?.Dispose();
         SeStringDebugger?.Dispose();
 
-        TypingIpc?.Dispose();
-        ExtraChat?.Dispose();
-        Ipc?.Dispose();
-        MessageManager?.DisposeAsync().AsTask().Wait();
         Functions?.Dispose();
         Commands?.Dispose();
 
         EmoteCache.Dispose();
-        ServerCore?.DisposeAsync().AsTask().Wait();
+
+        // These two are independent subsystems (SQLite message store vs. web server host), so
+        // run their (each internally-bounded) async teardown in parallel instead of back-to-back
+        // to avoid stacking their worst-case wait times on the calling thread during unload.
+        Task.WaitAll(
+        [
+            MessageManager?.DisposeAsync().AsTask() ?? Task.CompletedTask,
+            ServerCore?.DisposeAsync().AsTask() ?? Task.CompletedTask,
+        ]);
     }
 
     private void Draw()
@@ -260,11 +282,21 @@ public sealed class Plugin : IDalamudPlugin
     public void LanguageChanged(string langCode)
     {
         var info = Config.LanguageOverride is LanguageOverride.None
-            ? new CultureInfo(langCode)
+            ? new CultureInfo(MapDalamudLanguage(langCode))
             : new CultureInfo(Config.LanguageOverride.Code());
 
         Language.Culture = info;
     }
+
+    // TC Dalamud reports UiLanguage "tw", which CultureInfo resolves to the
+    // Twi (Ghana) language, silently falling back to English resources; map
+    // Chinese-flavoured codes onto the shipped zh satellites instead.
+    private static string MapDalamudLanguage(string langCode) => langCode switch
+    {
+        "tw" or "zh-TW" or "zh-Hant" => "zh-Hant",
+        "zh" or "zh-CN" or "zh-Hans" => "zh-Hans",
+        _ => langCode,
+    };
 
     private static readonly string[] ChatAddonNames =
     [
@@ -280,12 +312,21 @@ public sealed class Plugin : IDalamudPlugin
         if (DeferredSaveFrames >= 0 && DeferredSaveFrames-- == 0)
             SaveConfig();
 
+        if (DeferredFilterFrames >= 0 && DeferredFilterFrames-- == 0)
+            MessageManager.FilterAllTabsAsync();
+
         if (!Config.HideChat)
             return;
 
+        // Tabs with input disabled intentionally fall back to the native chat log (see
+        // Chat.ChatLogRefreshDetour's early-return for InputDisabled tabs) so the player still has a way
+        // to type. "Interactable" here is really the addon's IsVisible flag, so if it was hidden on a
+        // previous frame it needs to be actively restored, or the native box stays invisible while still
+        // silently capturing/sending keystrokes.
+        var wantInteractable = CurrentTab.InputDisabled;
         foreach (var name in ChatAddonNames)
-            if (GameFunctions.GameFunctions.IsAddonInteractable(name))
-                GameFunctions.GameFunctions.SetAddonInteractable(name, false);
+            if (GameFunctions.GameFunctions.IsAddonInteractable(name) != wantInteractable)
+                GameFunctions.GameFunctions.SetAddonInteractable(name, wantInteractable);
     }
 
     public static bool InBattle => Condition[ConditionFlag.InCombat];

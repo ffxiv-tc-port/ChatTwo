@@ -313,7 +313,9 @@ public static class ChunkUtil
                     break;
                 case PayloadType.Unknown:
                     var rawPayload = (RawPayload) payload;
-                    var colorPayload = ColorPayload.From(rawPayload.Data);
+                    // RawPayload.Data hands out a fresh copy on every read, so it is read once per payload.
+                    var data = rawPayload.Data;
+                    var colorPayload = ColorPayload.From(data);
                     if (colorPayload != null)
                     {
                         if (colorPayload.Enabled)
@@ -328,40 +330,40 @@ public static class ChunkUtil
                             foreground.Pop();
                         }
                     }
-                    else if (rawPayload.Data.Length > 1 && rawPayload.Data[1] == 0x14)
+                    else if (data.Length > 1 && data[1] == 0x14)
                     {
                         if (glow.Count > 0)
                         {
                             glow.Pop();
                         }
-                        else if (rawPayload.Data.Length > 6 && rawPayload.Data[2] == 0x05 && rawPayload.Data[3] == 0xF6)
+                        else if (data.Length > 6 && data[2] == 0x05 && data[3] == 0xF6)
                         {
-                            var (r, g, b) = (rawPayload.Data[4], rawPayload.Data[5], rawPayload.Data[6]);
+                            var (r, g, b) = (data[4], data[5], data[6]);
                             glow.Push(ColourUtil.ComponentsToRgba(r, g, b));
                         }
                     }
-                    else if (rawPayload.Data.Length > 7 && rawPayload.Data[1] == 0x27 && rawPayload.Data[3] == 0x0A)
+                    else if (data.Length > 7 && data[1] == 0x27 && data[3] == 0x0A)
                     {
                         // pf payload
-                        var reader = new BinaryReader(new MemoryStream(rawPayload.Data[4..]));
+                        var reader = new BinaryReader(new MemoryStream(data[4..]));
                         var id = GetInteger(reader);
                         link = new PartyFinderPayload(id);
                     }
-                    else if (rawPayload.Data.Length > 5 && rawPayload.Data[1] == 0x27 && rawPayload.Data[3] == 0x06)
+                    else if (data.Length > 5 && data[1] == 0x27 && data[3] == 0x06)
                     {
                         // achievement payload
-                        var reader = new BinaryReader(new MemoryStream(rawPayload.Data[4..]));
+                        var reader = new BinaryReader(new MemoryStream(data[4..]));
                         var id = GetInteger(reader);
                         link = new AchievementPayload(id);
                     }
-                    else if (rawPayload.Data is [_, (byte)MacroCode.NonBreakingSpace, _, _])
+                    else if (data is [_, (byte)MacroCode.NonBreakingSpace, _, _])
                     {
                         // NonBreakingSpace payload
                         Append(" ");
                     }
                     // NOTE: no URIPayload because it originates solely from
                     // new Message(). The game doesn't have a URI payload type.
-                    else if (Equals(rawPayload, RawPayload.LinkTerminator))
+                    else if (data.AsSpan().SequenceEqual(LinkTerminatorData))
                     {
                         link = null;
                     }
@@ -398,6 +400,9 @@ public static class ChunkUtil
 
         return builder.ToString();
     }
+
+    // What RawPayload.Equals compares a payload against when it is given RawPayload.LinkTerminator.
+    private static readonly byte[] LinkTerminatorData = RawPayload.LinkTerminator.Data;
 
     public static readonly RawPayload PeriodicRecruitmentLink = new([0x02, 0x27, 0x07, 0x08, 0x01, 0x01, 0x01, 0xFF, 0x01, 0x03]);
 

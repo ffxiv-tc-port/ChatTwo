@@ -363,13 +363,20 @@ public class DbViewer : Window
 
     private ConcurrentStack<Message> Filter(Message[] messages)
     {
+        // TC note: `messages.Reverse()` (extension-method syntax) resolves to
+        // System.MemoryExtensions.Reverse(Span<T>) (in-place, void-returning) instead of
+        // System.Linq.Enumerable.Reverse(IEnumerable<T>) on the SDK/language version used to build
+        // against this Dalamud pin, since arrays implicitly convert to Span<T>. Call Enumerable.Reverse
+        // explicitly to keep the original LINQ (non-mutating) behaviour.
         if (SimpleSearchTerm == "")
-            return new ConcurrentStack<Message>(messages.Reverse().OrderByDescending(m => m.Date));
+            return new ConcurrentStack<Message>(Enumerable.Reverse(messages).OrderByDescending(m => m.Date));
 
+        // The store holds lines from before and after TC 7.25 changed the middle dot; either spelling finds both.
+        var term = MiddleDot.Fold(SimpleSearchTerm);
         return new ConcurrentStack<Message>(
-            messages.Reverse().Where(m =>
-                ChunkUtil.ToRawString(m.Sender).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase) ||
-                ChunkUtil.ToRawString(m.Content).Contains(SimpleSearchTerm, StringComparison.InvariantCultureIgnoreCase)
+            Enumerable.Reverse(messages).Where(m =>
+                MiddleDot.Fold(ChunkUtil.ToRawString(m.Sender)).Contains(term, StringComparison.InvariantCultureIgnoreCase) ||
+                MiddleDot.Fold(ChunkUtil.ToRawString(m.Content)).Contains(term, StringComparison.InvariantCultureIgnoreCase)
                 ).OrderByDescending(m => m.Date));
     }
 
@@ -404,9 +411,9 @@ public class DbViewer : Window
                 ulong? character = OnlyCurrentCharacter ? Plugin.PlayerState.ContentId : null;
                 var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
 
-                var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels, character);
-                var messageHistory = rangeMessageEnumerator.ToArray();
-                await rangeMessageEnumerator.DisposeAsync();
+                Message[] messageHistory;
+                await using (var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels, character))
+                    messageHistory = rangeMessageEnumerator.ToArray();
 
                 var filteredHistory = Filter(messageHistory);
 
@@ -471,9 +478,9 @@ public class DbViewer : Window
             {
                 var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
 
-                var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels);
-                var messageHistory = rangeMessageEnumerator.ToArray();
-                await rangeMessageEnumerator.DisposeAsync();
+                Message[] messageHistory;
+                await using (var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels))
+                    messageHistory = rangeMessageEnumerator.ToArray();
 
                 var filteredHistory = Filter(messageHistory);
 

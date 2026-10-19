@@ -86,11 +86,21 @@ public class Configuration : IPluginConfiguration
     public bool DatabaseGatherCraftMessages;
     public bool LoadPreviousSession;
     public bool FilterIncludePreviousSessions;
+    public bool CrossCharacterMessages;
+
+    /// <summary>
+    /// Global rules for messages that should not exist at all: a match is neither written to the
+    /// message database nor shown in any tab. Same shape as the per-tab list on
+    /// <see cref="Tab.MessageFilters"/>, but that one only hides. This one is irreversible - a
+    /// message that was never stored cannot come back on the next refill.
+    /// </summary>
+    public List<MessageFilter> DatabaseMessageFilters = [];
     public bool SortAutoTranslate;
     public bool CollapseDuplicateMessages;
     public bool CollapseKeepUniqueLinks;
     public bool PlaySounds = true;
     public bool KeepInputFocus = true;
+    public bool InterceptKeybinds = true;
     public int MaxLinesToRender = 10_000; // 1-10000
     public bool Use24HourClock;
 
@@ -104,18 +114,18 @@ public class Configuration : IPluginConfiguration
     public SingleFontSpec GlobalFontV2 = new()
     {
         // dalamud only ships KR as regular, which chat2 used previously for global fonts
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
         SizePt = 12.75f,
     };
     public SingleFontSpec JapaneseFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkMedium),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansJpMedium),
         SizePt = 12.75f,
     };
     public bool ItalicEnabled;
     public SingleFontSpec ItalicFontV2 = new()
     {
-        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansCjkRegular),
+        FontId = new DalamudAssetFontAndFamilyId(DalamudAsset.NotoSansKrRegular),
         SizePt = 12.75f,
     };
 
@@ -123,6 +133,23 @@ public class Configuration : IPluginConfiguration
     public float WindowAlpha = 100f;
     public Dictionary<ChatType, uint> ChatColours = new();
     public List<Tab> Tabs = [];
+
+    // Running-max cache for ChatLog.DrawConditions()'s "hide when inactive" check: the max
+    // LastActivity across tabs that are always eligible to keep the window shown
+    // (!PopOut && UnhideOnActivity). Kept in sync incrementally from Tab.AddMessage and
+    // recalculated wholesale wherever tab membership (PopOut/UnhideOnActivity/the Tabs list
+    // itself) can change, so DrawConditions never has to re-scan Tabs every frame.
+    [NonSerialized] public long MaxUnhideEligibleTabActivity;
+
+    public void RecalculateMaxUnhideEligibleTabActivity()
+    {
+        var max = 0L;
+        foreach (var tab in Tabs)
+            if (!tab.PopOut && tab.UnhideOnActivity && tab.LastActivity > max)
+                max = tab.LastActivity;
+
+        MaxUnhideEligibleTabActivity = max;
+    }
 
     public bool OverrideStyle;
     public string? ChosenStyle;
@@ -181,11 +208,14 @@ public class Configuration : IPluginConfiguration
         DatabaseGatherCraftMessages = other.DatabaseGatherCraftMessages;
         LoadPreviousSession = other.LoadPreviousSession;
         FilterIncludePreviousSessions = other.FilterIncludePreviousSessions;
+        CrossCharacterMessages = other.CrossCharacterMessages;
+        DatabaseMessageFilters = other.DatabaseMessageFilters.Select(f => f.Clone()).ToList();
         SortAutoTranslate = other.SortAutoTranslate;
         CollapseDuplicateMessages = other.CollapseDuplicateMessages;
         CollapseKeepUniqueLinks = other.CollapseKeepUniqueLinks;
         PlaySounds = other.PlaySounds;
         KeepInputFocus = other.KeepInputFocus;
+        InterceptKeybinds = other.InterceptKeybinds;
         MaxLinesToRender = other.MaxLinesToRender;
         Use24HourClock = other.Use24HourClock;
         ShowEmotes = other.ShowEmotes;
@@ -212,6 +242,8 @@ public class Configuration : IPluginConfiguration
         WebinterfacePort = other.WebinterfacePort;
         WebinterfaceMaxLinesToSend = other.WebinterfaceMaxLinesToSend;
         MigrationStatus = other.MigrationStatus;
+
+        RecalculateMaxUnhideEligibleTabActivity();
     }
 }
 
@@ -254,10 +286,19 @@ public class Tab
     public bool ExtraChatAll;
     public HashSet<Guid> ExtraChatChannels = [];
 
+    /// <summary>
+    /// Rules hiding messages from this tab by their text. Purely a view filter - the messages
+    /// are still stored, so deleting a rule brings them back on the next refill. The global
+    /// <see cref="Configuration.DatabaseMessageFilters"/> is the destructive counterpart.
+    /// </summary>
+    public List<MessageFilter> MessageFilters = [];
+
     public UnreadMode UnreadMode = UnreadMode.Unseen;
     public bool UnhideOnActivity;
     public bool DisplayTimestamp = true;
     public InputChannel? Channel;
+    // false: Channel is only applied when the tab is switched to (or on login); the user may change it afterwards.
+    public bool LockChannel = true;
     public bool PopOut;
     public bool IndependentOpacity;
     public float Opacity = 100f;
@@ -290,6 +331,10 @@ public class Tab
 
     public bool Matches(Message message)
     {
+        // Text rules run first so they also cover tell tabs, which take an early return below.
+        if (MessageFilterSet.Blocks(MessageFilters, message))
+            return false;
+
         if (Channel == InputChannel.Tell && TellTarget.IsSet())
         {
             if (!message.Code.IsPlayerMessage())
@@ -322,7 +367,17 @@ public class Tab
 
         Unread += 1;
         if (message.Matches(Plugin.Config.InactivityHideChannelsV2, Plugin.Config.InactivityHideExtraChatAll, Plugin.Config.InactivityHideExtraChatChannels))
+        {
             LastActivity = Environment.TickCount64;
+
+            // Keep Configuration.MaxUnhideEligibleTabActivity's running max in sync instead of
+            // ChatLog.DrawConditions() having to re-scan every tab each frame. Only tabs that
+            // are unconditionally eligible (not popped out, UnhideOnActivity) feed this cache;
+            // the current-tab special case is still checked live in DrawConditions since it's
+            // an O(1) check.
+            if (!PopOut && UnhideOnActivity && LastActivity > Plugin.Config.MaxUnhideEligibleTabActivity)
+                Plugin.Config.MaxUnhideEligibleTabActivity = LastActivity;
+        }
     }
 
     public void Clear()
@@ -336,12 +391,14 @@ public class Tab
             SelectedChannels = SelectedChannels.ToDictionary(pair => pair.Key, pair => pair.Value),
             ExtraChatAll = ExtraChatAll,
             ExtraChatChannels = ExtraChatChannels.ToHashSet(),
+            MessageFilters = MessageFilters.Select(f => f.Clone()).ToList(),
             UnreadMode = UnreadMode,
             UnhideOnActivity = UnhideOnActivity,
             Unread = Unread,
             LastActivity = LastActivity,
             DisplayTimestamp = DisplayTimestamp,
             Channel = Channel,
+            LockChannel = LockChannel,
             PopOut = PopOut,
             IndependentOpacity = IndependentOpacity,
             Opacity = Opacity,
@@ -375,16 +432,27 @@ public class Tab
         private readonly List<Message> Messages;
         private readonly HashSet<Guid> TrackedMessageIds;
 
+        // Holds no state of its own (the lock and the list are this object's), so every reader gets the same one.
+        private readonly RLockedMessageList ReadOnlyView;
+
+        // What a login refill needs to know it may skip rows (MessageManager.RefillAfterLogin), under LockSlim:
+        // ids dropped by the display limit since the last refill (null = too many to keep, refill everything),
+        // and how many times anything else took messages out.
+        private List<(Guid Id, long Date)>? PrunedSinceRefill = [];
+        private long Removals;
+
         public MessageList()
         {
             Messages = [];
             TrackedMessageIds = [];
+            ReadOnlyView = new RLockedMessageList(LockSlim, Messages);
         }
 
         public MessageList(int initialCapacity)
         {
             Messages = new List<Message>(initialCapacity);
             TrackedMessageIds = new HashSet<Guid>(initialCapacity);
+            ReadOnlyView = new RLockedMessageList(LockSlim, Messages);
         }
 
         public void AddPrune(Message message, int max)
@@ -434,6 +502,34 @@ public class Tab
             {
                 Messages.Clear();
                 TrackedMessageIds.Clear();
+                Removals++;
+            }
+            finally
+            {
+                LockSlim.Release();
+            }
+        }
+
+        /// <summary>
+        /// Drops every message matching the predicate. Used when a channel is turned off for a
+        /// tab so the messages already on screen go away immediately, instead of having to
+        /// re-read the whole store. Must not be called while a TryGetReadOnly lock is held -
+        /// LockSlim is not reentrant.
+        /// </summary>
+        public void RemoveWhere(Predicate<Message> predicate)
+        {
+            LockSlim.Wait(-1);
+            try
+            {
+                for (var i = Messages.Count - 1; i >= 0; i--)
+                {
+                    if (!predicate(Messages[i]))
+                        continue;
+
+                    TrackedMessageIds.Remove(Messages[i].Id);
+                    Messages.RemoveAt(i);
+                    Removals++;
+                }
             }
             finally
             {
@@ -450,8 +546,36 @@ public class Tab
         {
             while (Messages.Count > max)
             {
-                TrackedMessageIds.Remove(Messages[0].Id);
+                var pruned = Messages[0];
+                TrackedMessageIds.Remove(pruned.Id);
                 Messages.RemoveAt(0);
+
+                if (PrunedSinceRefill == null)
+                    continue;
+                if (PrunedSinceRefill.Count < MessageManager.MessageDisplayLimit)
+                    PrunedSinceRefill.Add((pruned.Id, pruned.Date.ToUnixTimeMilliseconds()));
+                else
+                    PrunedSinceRefill = null;
+            }
+        }
+
+        /// <summary>
+        /// Starts a new refill period: hands back the ids pruned since the previous call (null when there were too
+        /// many to keep) and the removal count, which only changes when something other than pruning took messages out.
+        /// </summary>
+        public List<(Guid Id, long Date)>? TakeRefillLog(out long removals)
+        {
+            LockSlim.Wait(-1);
+            try
+            {
+                var pruned = PrunedSinceRefill;
+                PrunedSinceRefill = [];
+                removals = Removals;
+                return pruned;
+            }
+            finally
+            {
+                LockSlim.Release();
             }
         }
 
@@ -460,7 +584,10 @@ public class Tab
         /// </summary>
         public async Task<Message[]> GetCopy(int millisecondsTimeout = -1)
         {
-            await LockSlim.WaitAsync(millisecondsTimeout);
+            // Releasing a lock this call never got would let two holders in and later overflow the semaphore.
+            if (!await LockSlim.WaitAsync(millisecondsTimeout))
+                throw new TimeoutException("Message list lock not acquired");
+
             try
             {
                 return Messages.ToArray();
@@ -472,13 +599,13 @@ public class Tab
         }
 
         /// <summary>
-        /// GetReadOnly returns a read-only list of messages while holding a
-        /// reader lock. The list should be used with a using statement.
+        /// Returns a read-only list of messages while holding the lock, to be disposed exactly once
+        /// (a using statement). Null when the lock was not acquired in time: nothing is held then,
+        /// so there is nothing to dispose.
         /// </summary>
-        public RLockedMessageList GetReadOnly(int millisecondsTimeout = -1)
+        public RLockedMessageList? TryGetReadOnly(int millisecondsTimeout)
         {
-            LockSlim.Wait(millisecondsTimeout);
-            return new RLockedMessageList(LockSlim, Messages);
+            return LockSlim.Wait(millisecondsTimeout) ? ReadOnlyView : null;
         }
 
         public class RLockedMessageList(SemaphoreSlim lockSlim, List<Message> messages) : IReadOnlyList<Message>, IDisposable
@@ -525,7 +652,11 @@ public class UsedChannel
     public void SetChannel(InputChannel channel)
     {
         Channel = channel;
-        Name = [];
+
+        // Called every frame for a tab with a fixed channel. Name lists are never edited in place, so an empty one is
+        // kept rather than replaced by another empty one.
+        if (Name.Count > 0)
+            Name = [];
     }
 
     public UsedChannel Clone()

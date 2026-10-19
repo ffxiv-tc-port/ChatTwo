@@ -29,6 +29,7 @@ public class Popout : Window, IChatWindow
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
     public HideState CurrentHideState { get; set; } = HideState.None;
+    public Tab? ContextTab => Tab;
 
     public Popout(Plugin plugin, Tab tab, int idx) : base($"{tab.Name}##popout")
     {
@@ -79,6 +80,16 @@ public class Popout : Window, IChatWindow
 
     public override void PreDraw()
     {
+        // Dalamud's built-in per-window opacity (right-click title bar -> Opacity, and window presets)
+        // is applied by base.PreDraw pushing ImGuiStyleVar.Alpha; without this call that slider silently
+        // does nothing for this window. It goes first so our own pushes below nest inside it, and
+        // base.PostDraw pops last. It multiplies with ChatTwo's own WindowAlpha - intended, they are two
+        // independent controls.
+        base.PreDraw();
+
+        if (Plugin.Config.KeepInputFocus && InputHandler.Activate)
+            ImGui.SetWindowFocus(WindowName);
+
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Push();
 
@@ -96,8 +107,24 @@ public class Popout : Window, IChatWindow
         {
             var alpha = Tab.IndependentOpacity ? Tab.Opacity : Plugin.Config.WindowAlpha;
             BgAlpha = alpha / 100f;
+
+            // BgAlpha only covers ImGuiCol.WindowBg; the title bar and chat input
+            // frame use separate style colours that never respected opacity, so
+            // scale them the same way here, after the theme override above.
+            var alphaScale = alpha / 100f;
+            foreach (var col in OpacityScaledColours)
+            {
+                var c = ImGui.GetStyle().Colors[(int) col];
+                ImGui.PushStyleColor(col, new Vector4(c.X, c.Y, c.Z, c.W * alphaScale));
+            }
         }
     }
+
+    private static readonly ImGuiCol[] OpacityScaledColours =
+    [
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg, ImGuiCol.ChildBg,
+        ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
+    ];
 
     public override void Draw()
     {
@@ -124,17 +151,18 @@ public class Popout : Window, IChatWindow
         if (!Tab.SupportsInput)
             return;
 
-        // This tab has a fixed channel, so we force this channel to be always set as current
-        if (Tab.Channel is not null)
+        // A locked channel is forced every frame; an unlocked one only seeds a popout that has no channel yet.
+        var channelLocked = Tab.Channel is not null && Tab.LockChannel;
+        if (Tab.Channel is not null && (channelLocked || Tab.CurrentChannel.Channel is InputChannel.Invalid))
             Tab.CurrentChannel.SetChannel(Tab.Channel.Value);
 
         using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
             Plugin.ChatLog.DrawChannelName(Tab);
 
-        if (ImGuiUtil.IconButton(FontAwesomeIcon.Comment) && Tab.Channel is null)
+        if (ImGuiUtil.IconButton(FontAwesomeIcon.Comment) && !channelLocked)
             ImGui.OpenPopup(ChatChannelPicker);
 
-        if (Tab.Channel is not null && ImGui.IsItemHovered())
+        if (channelLocked && ImGui.IsItemHovered())
             ImGuiUtil.Tooltip(Language.ChatLog_SwitcherDisabled);
 
         using (var popup = ImRaii.Popup(ChatChannelPicker))
@@ -155,10 +183,17 @@ public class Popout : Window, IChatWindow
 
     public override void PostDraw()
     {
+        if (!Plugin.ChatLog.PopOutDocked[Idx])
+            ImGui.PopStyleColor(OpacityScaledColours.Length);
+
         Plugin.ChatLog.PopOutDocked[Idx] = ImGui.IsWindowDocked();
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Pop();
+
+        // Pops the ImGuiStyleVar.Alpha that base.PreDraw pushed; must be last so the
+        // style stack unwinds in reverse order.
+        base.PostDraw();
     }
 
     public override void OnClose()
@@ -167,6 +202,16 @@ public class Popout : Window, IChatWindow
         Plugin.WindowSystem.RemoveWindow(this);
 
         Tab.PopOut = false;
+
+        // Mirror into the settings window's snapshot so saving settings doesn't pop the window straight
+        // back out (see SettingsWindow.MirrorTabEdit) - but only for a real user close. Saving settings
+        // replaces every entry of Config.Tabs with a fresh clone and closes this window while rebinding it;
+        // mirroring that churn would un-pop-out the tab on the next save. Reference identity separates
+        // the two: an orphaned Tab is no longer in the live list (Contains is a reference check).
+        if (Plugin.Config.Tabs.Contains(Tab))
+            Plugin.SettingsWindow.MirrorTabEdit(Tab.Identifier, mirror => mirror.PopOut = false);
+
+        Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
         Plugin.SaveConfig();
     }
 

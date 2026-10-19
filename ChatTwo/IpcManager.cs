@@ -47,7 +47,8 @@ public sealed class IpcManager : IDisposable
 
     public void Dispose()
     {
-        UnregisterGate.UnregisterFunc();
+        // 建構子用 RegisterAction 註冊，要用配對的 UnregisterAction 才會清掉（UnregisterFunc 只清 Func 那一格）。
+        UnregisterGate.UnregisterAction();
         RegisterGate.UnregisterFunc();
         Registered.Clear();
     }

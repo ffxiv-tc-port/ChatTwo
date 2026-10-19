@@ -73,6 +73,65 @@ public sealed class SettingsWindow : Window
         Mutable.UpdateFrom(Plugin.Config, false);
     }
 
+    /// <summary>
+    /// <para>
+    /// Applies an edit that has already been made to the live <see cref="Plugin.Config"/> to this
+    /// window's working copy as well.
+    /// </para>
+    /// <para>
+    /// <see cref="Mutable"/> is a snapshot of the config taken when the window opens, and saving
+    /// copies the whole snapshot back over the live config. So anything that edits the live config
+    /// while this window is open (the message right-click channel controls, the tab right-click
+    /// menu, closing a pop-out) is silently reverted the next time Save is pressed. Mirroring the
+    /// edit into the snapshot one field at a time - rather than re-running <see cref="Initialise"/>
+    /// - keeps whatever the user has changed in this window but not yet saved.
+    /// </para>
+    /// <para>
+    /// Tabs are matched on <see cref="Tab.Identifier"/>, not index: this window can add, delete and
+    /// reorder tabs in its own copy, so the two lists' indices are not comparable. Identifier is
+    /// [NonSerialized] and carried over by <see cref="Tab.Clone"/>, so both lists always descend
+    /// from the same in-memory objects and the ids do line up. No match (the tab was deleted in
+    /// this window, or the mirrored tab predates the snapshot) is a no-op by design.
+    /// </para>
+    /// <para>
+    /// Safe to call while the window is closed - the snapshot is rebuilt from scratch on the next
+    /// <c>IsWindowAppearing()</c>, so mirroring into a stale snapshot has no effect either way.
+    /// </para>
+    /// </summary>
+    public void MirrorTabEdit(Guid identifier, Action<Tab> apply)
+    {
+        foreach (var tab in Mutable.Tabs)
+        {
+            if (tab.Identifier != identifier)
+                continue;
+
+            apply(tab);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors a tab deletion into this window's working copy. See <see cref="MirrorTabEdit"/>.
+    /// </summary>
+    public void MirrorTabRemoval(Guid identifier)
+    {
+        Mutable.Tabs.RemoveAll(tab => tab.Identifier == identifier);
+    }
+
+    /// <summary>
+    /// Mirrors a tab reorder into this window's working copy by swapping the same two tabs,
+    /// wherever they happen to sit in the snapshot's own ordering. See <see cref="MirrorTabEdit"/>.
+    /// </summary>
+    public void MirrorTabSwap(Guid first, Guid second)
+    {
+        var a = Mutable.Tabs.FindIndex(tab => tab.Identifier == first);
+        var b = Mutable.Tabs.FindIndex(tab => tab.Identifier == second);
+        if (a < 0 || b < 0 || a == b)
+            return;
+
+        (Mutable.Tabs[a], Mutable.Tabs[b]) = (Mutable.Tabs[b], Mutable.Tabs[a]);
+    }
+
     public override void Draw()
     {
         if (ImGui.IsWindowAppearing())

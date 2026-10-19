@@ -1,34 +1,42 @@
 ﻿# Chat 2
-#### Electric Boogaloo - ♪ A whole new chat, a new fantastic chat window ♪
 
-Chat 2 is a complete rewrite of the in-game chat window as a plugin.
-It supports:
+[Chat 2](https://github.com/Infiziert90/ChatTwo) 的台服移植版。完整重寫遊戲內建聊天視窗的插件。
 
-- Unlimited tabs
-- Tabs that always send to a certain channel
-- More flexible filtering
-- RGB channel colouring
-- Completely variable font size
-- Sidebar tabs
-- Unread counts
-- Emotes
-- Screenshot mode (obfuscate names)
+## 功能
 
----
+- 無限制的分頁數量，可讓分頁固定發送到指定頻道
+- 更彈性的訊息過濾條件
+- 頻道文字顏色可自訂 RGB
+- 字型大小可自由調整
+- 側邊欄分頁樣式
+- 未讀訊息計數
+- 表情符號支援
+- 截圖模式（隱藏玩家名稱）
+- 聊天記錄存進本機資料庫：可跨登入保留歷史訊息、可設定是否收錄戰鬥／製作採集訊息、可合併顯示同帳號各角色的訊息
+- 網頁介面：可透過瀏覽器讀取聊天內容（預設關閉，需自行啟用）
+- IPC：其他插件可將功能整合進 Chat 2 的右鍵選單，詳見 `ipc.md`
 
-### Chat Window
-![chatWindow.png](ChatTwo/images/chatWindow.png)
+## 指令
 
-### With SimpleTweaks "Chat Name Colors"
-![withSimpleTweaks.png](ChatTwo/images/withSimpleTweaks.png)
+- `/chat2`：開關設定視窗；`/chat2 hide`／`show`／`toggle` 隱藏、顯示或切換聊天視窗
+- `/chat2Viewer`：開啟聊天記錄瀏覽器（可搜尋歷史訊息）
+- `/clearlog2`：清除 Chat 2 的聊天記錄
 
----
+## 台服版的修改
 
-### IPC Integration
-Other plugins can easily integrate their functionality into the context menu of chat2
-For more infos read [IPC Guide](ipc.md)
+- 介面繁體中文化（台服客戶端也載得到繁中語系）。
+- 右鍵玩家名字的選單多了「傳送好友申請」與「加入到黑名單」；「目標」會先找名字和世界都相符的人。
+- 悄悄話：對象分頁只收那個人的悄悄話；從右鍵選單或悄悄話歷史設定的對象改用 `/tell` 送出、補上 @世界，打的字不再消失。
+- 「播放過場動畫時隱藏聊天視窗」改成等遊戲自己藏起聊天視窗才跟著藏，會被自動跳過的過場不再閃一下。
+- 點聊天裡的招募通知連結一定會打開隊員招募視窗。
+- 地名的「·」改成「・」之後，過濾規則與 `/chat2Viewer` 搜尋兩種寫法都認得。
+- 遊戲改版後某條特徵碼對不上時，只停掉對應的那一項功能，不再整個插件載入失敗。
+- 多處降低記憶體用量；插件卸載或更新時不再讓遊戲卡一下。
 
----
+## 安裝
 
-### Thanks to
-The original dev Anna~
+在 Dalamud 設定的「自訂插件庫」加入
+`https://raw.githubusercontent.com/ffxiv-tc-port/DalamudPluginsTC/main/repo.json`
+並啟用，再從插件列表安裝。
+
+原作者：Anna（目前由 [Infiziert90](https://github.com/Infiziert90/ChatTwo) 維護）

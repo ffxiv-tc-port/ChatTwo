@@ -6,13 +6,22 @@ using FFXIVClientStructs.FFXIV.Client.UI.Info;
 
 namespace ChatTwo.GameFunctions;
 
+// All five entry points are context-menu actions reached only from managed code (PayloadHandler ->
+// ImGui.Selectable). Guards use Chat.ResolveOrNull (see the comment there): dereferencing a null
+// Instance() is an uncatchable AccessViolationException even from a purely managed call site.
+// Degradation: the invite/kick/promote silently does not happen and one throttled Error is logged.
+// Deliberately no user-facing notification - users read a popup here as a server answer.
 public static unsafe class Party
 {
     public static void InviteSameWorld(string name, ushort world, ulong contentId)
     {
+        var proxy = Chat.ResolveOrNull<InfoProxyPartyInvite>(&InfoProxyPartyInvite.Instance, "Party/inviteSameWorld", "Could not resolve InfoProxyPartyInvite; the party invite was not sent");
+        if (proxy == null)
+            return;
+
         // this only works if target is on the same world
         fixed (byte* namePtr = name.ToTerminatedBytes()) {
-            InfoProxyPartyInvite.Instance()->InviteToParty(contentId, namePtr, world);
+            proxy->InviteToParty(contentId, namePtr, world);
         }
     }
 
@@ -28,7 +37,11 @@ public static unsafe class Party
             return;
         }
 
-        InfoProxyPartyInvite.Instance()->InviteToPartyContentId(contentId, worldId);
+        var proxy = Chat.ResolveOrNull<InfoProxyPartyInvite>(&InfoProxyPartyInvite.Instance, "Party/inviteOtherWorld", "Could not resolve InfoProxyPartyInvite; the cross-world party invite was not sent");
+        if (proxy == null)
+            return;
+
+        proxy->InviteToPartyContentId(contentId, worldId);
     }
 
     public static void InviteInInstance(ulong contentId)
@@ -39,20 +52,32 @@ public static unsafe class Party
             return;
         }
 
-        InfoProxyPartyInvite.Instance()->InviteToPartyInInstanceByContentId(contentId);
+        var proxy = Chat.ResolveOrNull<InfoProxyPartyInvite>(&InfoProxyPartyInvite.Instance, "Party/inviteInInstance", "Could not resolve InfoProxyPartyInvite; the in-instance party invite was not sent");
+        if (proxy == null)
+            return;
+
+        proxy->InviteToPartyInInstanceByContentId(contentId);
     }
 
     public static void Kick(string name, ulong contentId)
     {
+        var agent = Chat.ResolveOrNull<AgentPartyMember>(&AgentPartyMember.Instance, "Party/kick", "Could not resolve AgentPartyMember; the party member was not kicked");
+        if (agent == null)
+            return;
+
         fixed (byte* namePtr = name.ToTerminatedBytes()) {
-            AgentPartyMember.Instance()->Kick(namePtr, 0, contentId);
+            agent->Kick(namePtr, 0, contentId);
         }
     }
 
     public static void Promote(string name, ulong contentId)
     {
+        var agent = Chat.ResolveOrNull<AgentPartyMember>(&AgentPartyMember.Instance, "Party/promote", "Could not resolve AgentPartyMember; the party member was not promoted");
+        if (agent == null)
+            return;
+
         fixed (byte* namePtr = name.ToTerminatedBytes()) {
-            AgentPartyMember.Instance()->Promote(namePtr, 0, contentId);
+            agent->Promote(namePtr, 0, contentId);
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Numerics;
 using System.Text;
 using ChatTwo.Code;
@@ -92,80 +93,98 @@ public static class ImGuiUtil
         if (csText.Length == 0)
             return;
 
-        foreach (var part in csText.Split(["\r\n", "\r", "\n"], StringSplitOptions.None))
+        // One encode for the whole text, cut at the line breaks, so nothing is allocated per frame. CR and LF are single
+        // bytes that never occur inside a multi-byte UTF-8 sequence: each line gets the same bytes as encoding it on its
+        // own, and CR LF is one break.
+        var byteCount = Encoding.UTF8.GetByteCount(csText);
+        byte[]? rented = null;
+        Span<byte> buffer = byteCount <= StackUtf8Limit
+            ? stackalloc byte[byteCount]
+            : (rented = ArrayPool<byte>.Shared.Rent(byteCount));
+        try
         {
-            var bytes = Encoding.UTF8.GetBytes(part);
-            fixed (byte* rawText = bytes)
+            var length = Encoding.UTF8.GetBytes(csText, buffer);
+            fixed (byte* start = buffer)
             {
-                var text = rawText;
-                var textEnd = text + bytes.Length;
-
-                // empty string
-                if (text == null)
+                var end = start + length;
+                for (var next = start; next != null;)
                 {
-                    ImGui.TextUnformatted("");
-                    continue;
-                }
+                    var text = next;
+                    var textEnd = LineEnd(text, end);
+                    next = NextLineStart(textEnd, end);
 
-                var widthLeft = ImGui.GetContentRegionAvail().X;
-                var endPrevLine = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, textEnd, widthLeft);
-                if (endPrevLine == null)
-                    continue;
-
-                var firstSpace = FindFirstSpace(text, textEnd);
-                var properBreak = firstSpace <= endPrevLine;
-                if (properBreak)
-                {
-                    Text(text, endPrevLine);
-                }
-                else
-                {
-                    if (lineWidth == 0f)
+                    // empty string
+                    if (text == textEnd)
                     {
                         ImGui.TextUnformatted("");
+                        continue;
+                    }
+
+                    var widthLeft = ImGui.GetContentRegionAvail().X;
+                    var endPrevLine = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, textEnd, widthLeft);
+                    if (endPrevLine == null)
+                        continue;
+
+                    var firstSpace = FindFirstSpace(text, textEnd);
+                    var properBreak = firstSpace <= endPrevLine;
+                    if (properBreak)
+                    {
+                        Text(text, endPrevLine);
                     }
                     else
                     {
-                        // check if the next bit is longer than the entire line width
-                        var wrapPos = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, firstSpace, lineWidth);
-
-                        // only go to next line is it's going to wrap at the space
-                        if (wrapPos >= firstSpace)
+                        if (lineWidth == 0f)
+                        {
                             ImGui.TextUnformatted("");
-                    }
-                }
+                        }
+                        else
+                        {
+                            // check if the next bit is longer than the entire line width
+                            var wrapPos = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, firstSpace, lineWidth);
 
-                widthLeft = ImGui.GetContentRegionAvail().X;
-                while (endPrevLine < textEnd)
-                {
-                    if (properBreak)
-                        text = endPrevLine;
-
-                    // skip a space at start of line
-                    if (*text == ' ')
-                        ++text;
-
-                    var newEnd = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, textEnd, widthLeft);
-                    if (properBreak && newEnd == endPrevLine)
-                        break;
-
-                    endPrevLine = newEnd;
-                    if (endPrevLine == null)
-                    {
-                        ImGui.TextUnformatted("");
-                        ImGui.TextUnformatted("");
-                        break;
+                            // only go to next line is it's going to wrap at the space
+                            if (wrapPos >= firstSpace)
+                                ImGui.TextUnformatted("");
+                        }
                     }
 
-                    Text(text, endPrevLine);
-
-                    if (!properBreak)
+                    widthLeft = ImGui.GetContentRegionAvail().X;
+                    while (endPrevLine < textEnd)
                     {
-                        properBreak = true;
-                        widthLeft = ImGui.GetContentRegionAvail().X;
+                        if (properBreak)
+                            text = endPrevLine;
+
+                        // skip a space at start of line
+                        if (*text == ' ')
+                            ++text;
+
+                        var newEnd = ImGuiNative.CalcWordWrapPositionA(ImGui.GetFont().Handle, ImGuiHelpers.GlobalScale, text, textEnd, widthLeft);
+                        if (properBreak && newEnd == endPrevLine)
+                            break;
+
+                        endPrevLine = newEnd;
+                        if (endPrevLine == null)
+                        {
+                            ImGui.TextUnformatted("");
+                            ImGui.TextUnformatted("");
+                            break;
+                        }
+
+                        Text(text, endPrevLine);
+
+                        if (!properBreak)
+                        {
+                            properBreak = true;
+                            widthLeft = ImGui.GetContentRegionAvail().X;
+                        }
                     }
                 }
             }
+        }
+        finally
+        {
+            if (rented != null)
+                ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -178,9 +197,40 @@ public static class ImGuiUtil
         return textEnd;
     }
 
+    // Longer chat text is encoded into a pooled array instead of on the stack.
+    private const int StackUtf8Limit = 1024;
+    private const byte Cr = 13;
+    private const byte Lf = 10;
+
+    private static unsafe byte* LineEnd(byte* text, byte* end)
+    {
+        var index = new ReadOnlySpan<byte>(text, (int) (end - text)).IndexOfAny(Cr, Lf);
+        return index < 0 ? end : text + index;
+    }
+
+    // Null once the last line has been taken; a CR LF pair is one break.
+    private static unsafe byte* NextLineStart(byte* lineEnd, byte* end)
+    {
+        if (lineEnd == end)
+            return null;
+
+        return lineEnd + 1 < end && lineEnd[0] == Cr && lineEnd[1] == Lf ? lineEnd + 2 : lineEnd + 1;
+    }
+
+    // Draw thread only. ToIconString builds a new one-character string on every call.
+    private static readonly Dictionary<FontAwesomeIcon, string> IconStrings = [];
+
+    private static string IconString(FontAwesomeIcon icon)
+    {
+        if (!IconStrings.TryGetValue(icon, out var text))
+            IconStrings[icon] = text = icon.ToIconString();
+
+        return text;
+    }
+
     public static bool IconButton(FontAwesomeIcon icon, string? id = null, string? tooltip = null)
     {
-        var label = icon.ToIconString();
+        var label = IconString(icon);
         if (id != null)
             label += $"##{id}";
 
@@ -220,7 +270,7 @@ public static class ImGuiUtil
             ImGui.TextUnformatted(text);
     }
 
-    public static ImRaii.ComboDisposable BeginComboVertical(string label, string previewValue, ImGuiComboFlags flags = ImGuiComboFlags.None)
+    public static ImRaii.IEndObject BeginComboVertical(string label, string previewValue, ImGuiComboFlags flags = ImGuiComboFlags.None)
     {
         ImGui.TextUnformatted(label);
         ImGui.SetNextItemWidth(-1);
@@ -544,6 +594,107 @@ public static class ImGuiUtil
         return result != 0 || key == VirtualKey.NO_KEY;
     }
 
+    /// <summary>
+    /// Editor for a list of message text filters.
+    /// </summary>
+    /// <remarks>
+    /// Every pattern is compiled here, in the settings window, so a broken one shows the regex
+    /// compiler's own error next to the input. Without that the only symptom would be a rule
+    /// that quietly never matches, discovered days later.
+    /// <para>
+    /// This runs on the ImGui draw path, so MessageFilter.Compile catches everything - an escaping
+    /// exception here takes the whole plugin UI down until the game is restarted.
+    /// </para>
+    /// </remarks>
+    public static void MessageFilterEditor(string id, string headerText, string description, List<MessageFilter> filters, string? warning = null)
+    {
+        using var pushedId = ImRaii.PushId(id);
+
+        // ### so the tree keeps its id (and its open/closed state) as the counter changes.
+        using var node = ImRaii.TreeNode($"{headerText} ({filters.Count})###filter-list");
+        if (!node.Success)
+            return;
+
+        HelpText(description);
+
+        // "This cannot be undone" is scan-on-sight information, not something to go hunting for,
+        // so it sits on the row in warning colour instead of behind a hover.
+        if (warning != null)
+            WarningText(warning);
+
+        HelpText(Language.Options_MessageFilters_MatchTarget);
+
+        // A real line, not a description of one. The separator between name and text comes from
+        // the game's LogKind sheet and differs per channel and per client language, so telling
+        // someone "the sender is included" still leaves them guessing which character to type -
+        // and guessing wrong produces a rule that silently never matches.
+        var sample = MessageFilterSet.SampleText();
+        HelpText(sample == null
+            ? Language.Options_MessageFilters_SampleNone
+            : string.Format(Language.Options_MessageFilters_Sample, Ellipsize(sample, SampleLimit)));
+
+        if (sample is { Length: > SampleLimit } && ImGui.IsItemHovered())
+            Tooltip(sample);
+
+        ImGui.Spacing();
+
+        var remove = -1;
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var filter = filters[i];
+            using var rowId = ImRaii.PushId(i);
+
+            if (IconButton(FontAwesomeIcon.TrashAlt, tooltip: Language.Options_MessageFilters_Delete))
+                remove = i;
+
+            ImGui.SameLine();
+            ImGui.Checkbox("##enabled", ref filter.Enabled);
+            if (ImGui.IsItemHovered())
+                Tooltip(Language.Options_MessageFilters_Enabled);
+
+            ImGui.SameLine();
+            var regexWidth = ImGui.CalcTextSize(Language.Options_MessageFilters_Regex).X + ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.X * 2;
+            ImGui.SetNextItemWidth(Math.Max(ImGui.GetFontSize() * 6f, ImGui.GetContentRegionAvail().X - regexWidth));
+            ImGui.InputTextWithHint("##pattern", Language.Options_MessageFilters_Hint, ref filter.Pattern, 500);
+
+            ImGui.SameLine();
+            ImGui.Checkbox(Language.Options_MessageFilters_Regex, ref filter.IsRegex);
+
+            var compiled = filter.Compiled;
+            if (compiled.Error != null)
+                WarningText(string.Format(Language.Options_MessageFilters_Invalid, compiled.Error));
+            else if (compiled.Backtracking)
+                HelpText(Language.Options_MessageFilters_Backtracking);
+        }
+
+        if (remove > -1)
+            filters.RemoveAt(remove);
+
+        if (ImGui.Button(Language.Options_MessageFilters_Add))
+            filters.Add(new MessageFilter());
+    }
+
+    /// <summary>How much of the sample line is shown inline; the rest goes in a tooltip.</summary>
+    private const int SampleLimit = 60;
+
+    /// <summary>
+    /// Shortens a string without ever splitting a surrogate pair. A lone surrogate would reach
+    /// ImGui as invalid UTF-8, and this runs on the draw path where that is not a cosmetic
+    /// problem. Chat lines have no length limit worth relying on - a shout or a novice network
+    /// message would otherwise wrap across half the settings window.
+    /// </summary>
+    private static string Ellipsize(string text, int max)
+    {
+        if (text.Length <= max)
+            return text;
+
+        var cut = max;
+        if (char.IsHighSurrogate(text[cut - 1]))
+            cut -= 1;
+
+        return string.Concat(text.AsSpan(0, cut), "…");
+    }
+
     public static void ChannelSelector(string headerText, Dictionary<ChatType, (ChatSource Source, ChatSource Target)> chatCodes)
     {
         var spacing = 3.0f * ImGuiHelpers.GlobalScale;
@@ -659,6 +810,6 @@ public static class ImGuiUtil
     public static Vector2 CalcIconButtonSize()
     {
         using (Plugin.FontManager.FontAwesome.Push())
-            return ImGui.CalcTextSize(FontAwesomeIcon.Cog.ToIconString()) + ImGui.GetStyle().FramePadding * 2;
+            return ImGui.CalcTextSize(IconString(FontAwesomeIcon.Cog)) + ImGui.GetStyle().FramePadding * 2;
     }
 }

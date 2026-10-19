@@ -49,6 +49,8 @@ public sealed class ExtraChat : IDisposable
     public void Dispose()
     {
         OverrideChannelGate.Unsubscribe(OnOverrideChannel);
+        ChannelCommandColoursGate.Unsubscribe(OnChannelCommandColours);
+        ChannelNamesGate.Unsubscribe(OnChannelNames);
     }
 
     private void OnOverrideChannel(OverrideInfo info)

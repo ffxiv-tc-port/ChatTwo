@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Buffers;
+using System.Text.RegularExpressions;
 
 namespace ChatTwo.Util;
 
@@ -30,6 +31,9 @@ public static class Tokenizer
         public string Value { get; } = value;
     }
 
+    /// <summary>A token as a range of the tokenized text; the SequenceTerminator has Start = text length, Length 0.</summary>
+    public readonly record struct TokenSpan(TokenType TokenType, int Start, int Length);
+
     public static class PrecedenceBasedRegexTokenizer
     {
         private static readonly List<TokenDefinition> TokenDefinitions;
@@ -55,43 +59,81 @@ public static class Tokenizer
 
         public static IEnumerable<Token> Tokenize(string lqlText)
         {
-            var tokenMatches = FindTokenMatches(lqlText);
-
-            var groupedByIndex = tokenMatches.GroupBy(x => x.StartIndex)
-                .OrderBy(x => x.Key)
-                .ToList();
-
-            TokenMatch? lastMatch = null;
-            foreach (var t in groupedByIndex)
-            {
-                var bestMatch = t.OrderBy(x => x.Precedence).First();
-                if (lastMatch != null && bestMatch.StartIndex < lastMatch.EndIndex)
-                    continue;
-
-                yield return new Token(bestMatch.TokenType, bestMatch.Value);
-
-                lastMatch = bestMatch;
-            }
-
-            yield return new Token(TokenType.SequenceTerminator);
+            var tokens = new List<TokenSpan>();
+            Tokenize(lqlText, tokens);
+            foreach (var t in tokens)
+                yield return t.TokenType == TokenType.SequenceTerminator ? new Token(t.TokenType) : new Token(t.TokenType, lqlText.Substring(t.Start, t.Length));
         }
 
-        private static List<TokenMatch> FindTokenMatches(string lqlText)
+        /// <summary>Replaces the content of <paramref name="tokens"/> with what <see cref="Tokenize(string, Span{TokenSpan})"/> writes.</summary>
+        public static void Tokenize(string text, List<TokenSpan> tokens)
         {
-            var tokenMatches = new List<TokenMatch>();
+            var buffer = new TokenSpan[text.Length + 1];
+            var count = Tokenize(text, buffer);
+            tokens.Clear();
+            for (var i = 0; i < count; i++)
+                tokens.Add(buffer[i]);
+        }
 
-            foreach (var tokenDefinition in TokenDefinitions)
-                tokenMatches.AddRange(tokenDefinition.FindMatches(lqlText).ToList());
+        /// <summary>
+        /// Writes the tokens of <paramref name="text"/> and returns how many: per start index the match of lowest
+        /// precedence (on a tie the earliest definition), skipping matches that start inside the previous token, then
+        /// the SequenceTerminator. Every token but the terminator is at least one character long, so
+        /// <paramref name="tokens"/> needs room for text.Length + 1. Safe to call from any thread.
+        /// </summary>
+        public static int Tokenize(string text, Span<TokenSpan> tokens)
+        {
+            var count = 0;
+            var length = text.Length;
+            if (length > 0)
+            {
+                var best = ArrayPool<int>.Shared.Rent(length);
+                var ends = ArrayPool<int>.Shared.Rent(length);
+                try
+                {
+                    best.AsSpan(0, length).Fill(-1);
+                    for (var d = 0; d < TokenDefinitions.Count; d++)
+                    {
+                        var definition = TokenDefinitions[d];
+                        foreach (var match in definition.Regex.EnumerateMatches(text))
+                        {
+                            var current = best[match.Index];
+                            if (current >= 0 && TokenDefinitions[current].Precedence <= definition.Precedence)
+                                continue;
 
-            return tokenMatches;
+                            best[match.Index] = d;
+                            ends[match.Index] = match.Index + match.Length;
+                        }
+                    }
+
+                    var lastEnd = 0;
+                    for (var i = 0; i < length; i++)
+                    {
+                        var d = best[i];
+                        if (d < 0 || i < lastEnd)
+                            continue;
+
+                        tokens[count++] = new TokenSpan(TokenDefinitions[d].Type, i, ends[i] - i);
+                        lastEnd = ends[i];
+                    }
+                }
+                finally
+                {
+                    ArrayPool<int>.Shared.Return(best);
+                    ArrayPool<int>.Shared.Return(ends);
+                }
+            }
+
+            tokens[count++] = new TokenSpan(TokenType.SequenceTerminator, length, 0);
+            return count;
         }
     }
 
     private class TokenDefinition
     {
-        private readonly TokenType Type;
-        private readonly int Precedence;
-        private readonly Regex Regex;
+        public readonly TokenType Type;
+        public readonly int Precedence;
+        public readonly Regex Regex;
 
         public TokenDefinition(TokenType returnsToken, string regexPattern, int precedence)
         {
@@ -106,31 +148,6 @@ public static class Tokenizer
             Precedence = precedence;
             Regex = regex;
         }
-
-        public IEnumerable<TokenMatch> FindMatches(string inputString)
-        {
-            var matches = Regex.Matches(inputString);
-            for(var i = 0; i < matches.Count; i++)
-            {
-                yield return new TokenMatch
-                {
-                    StartIndex = matches[i].Index,
-                    EndIndex = matches[i].Index + matches[i].Length,
-                    TokenType = Type,
-                    Value = matches[i].Value,
-                    Precedence = Precedence
-                };
-            }
-        }
-    }
-
-    private class TokenMatch
-    {
-        public TokenType TokenType { get; set; }
-        public required string Value { get; set; }
-        public int StartIndex { get; set; }
-        public int EndIndex { get; set; }
-        public int Precedence { get; set; }
     }
 
     /// <summary>

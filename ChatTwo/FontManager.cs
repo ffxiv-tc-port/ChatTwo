@@ -4,6 +4,7 @@ using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Utility;
 using Dalamud.Bindings.ImGui;
+using System.Text.Unicode;
 
 namespace ChatTwo;
 
@@ -17,9 +18,12 @@ public class FontManager
 
     public IFontHandle FontAwesome = null!;
 
-    public readonly byte[] GameSymFont;
+    // Only consumed on-demand by the web interface (RouteController) and the debug DB export,
+    // never during font-atlas building, so it's safe to populate this in the background.
+    public byte[] GameSymFont = [];
 
     private ushort[] Ranges = [];
+    private ushort[] TcRange = [];
     private ushort[] JpRange = [];
 
     public static readonly HashSet<float> AxisFontSizeList =
@@ -38,13 +42,22 @@ public class FontManager
         }
         else
         {
-            GameSymFont = ServerCore.HttpClient.GetAsync("https://img.finalfantasyxiv.com/lds/pc/global/fonts/FFXIV_Lodestone_SSF.ttf")
-                .Result
-                .Content
-                .ReadAsByteArrayAsync()
-                .Result;
-
-            Dalamud.Utility.FilesystemUtil.WriteAllBytesSafe(filePath, GameSymFont);
+            // Fresh install / cleared cache: don't block plugin construction on an unbounded
+            // network call. Fetch in the background and populate once it lands.
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var response = await ServerCore.HttpClient.GetAsync("https://img.finalfantasyxiv.com/lds/pc/global/fonts/FFXIV_Lodestone_SSF.ttf");
+                    var bytes = await response.Content.ReadAsByteArrayAsync();
+                    GameSymFont = bytes;
+                    Dalamud.Utility.FilesystemUtil.WriteAllBytesSafe(filePath, bytes);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.Warning(ex, "Failed to download Lodestone game symbol font");
+                }
+            });
         }
     }
 
@@ -96,6 +109,15 @@ public class FontManager
                 ranges.Add(extraRange.Range());
 
         Ranges = BuildRange(null, ranges.ToArray());
+        // GlyphRangesJapanese only covers the JIS kanji subset, so traditional Chinese characters
+        // outside it never make it into the atlas and render as blanks. zh-TW pulls in the full
+        // CJK Unified Ideographs block (plus Extension A) to cover them.
+        TcRange = default(FluentGlyphRangeBuilder)
+            .WithLanguage("zh-TW")
+            .With(
+                UnicodeRanges.CjkSymbolsandPunctuation,
+                UnicodeRanges.HalfwidthandFullwidthForms)
+            .BuildExact();
         JpRange = BuildRange(GlyphRangesJapanese.GlyphRanges);
     }
 
@@ -123,6 +145,9 @@ public class FontManager
                     config.MergeFont = Plugin.Config.GlobalFontV2.FontId.AddToBuildToolkit(tk, config);
 
                     config.SizePt = Plugin.Config.JapaneseFontV2.SizePt;
+                    config.GlyphRanges = TcRange;
+                    Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
+
                     config.GlyphRanges = JpRange;
                     Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
 
@@ -143,6 +168,9 @@ public class FontManager
                         config.MergeFont = Plugin.Config.ItalicFontV2.FontId.AddToBuildToolkit(tk, config);
 
                         config.SizePt = Plugin.Config.JapaneseFontV2.SizePt;
+                        config.GlyphRanges = TcRange;
+                        Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
+
                         config.GlyphRanges = JpRange;
                         Plugin.Config.JapaneseFontV2.FontId.AddToBuildToolkit(tk, config);
 

@@ -162,13 +162,21 @@ public sealed class Tabs : ISettingsTab
                     }
                 }
 
+                if (tab.Channel is not null)
+                {
+                    ImGui.Checkbox(Language.Options_Tabs_LockChannel, ref tab.LockChannel);
+                    ImGuiUtil.HelpText(Language.Options_Tabs_LockChannel_Help);
+                }
+
+                // TC note：本 repo 釘的 Dalamud **有** IObjectTable.LocalPlayer
+                // （宣告在 Dalamud/Plugin/Services/IObjectTable.cs），下一行用的就是它。
                 var player = Plugin.ObjectTable.LocalPlayer;
                 if (tab.Channel == InputChannel.Tell && player != null)
                 {
                     ImGui.Checkbox(Language.Options_Tabs_SenderMessages, ref tab.AllSenderMessages);
                     ImGuiUtil.HelpText(Language.Options_Help_SenderMessagesV2);
 
-                    var worlds = Sheets.WorldsOnDatacenter(player).OrderByDescending(world => world.DataCenter.RowId).ThenBy(world => world.Name.ToString()).ToList();
+                    var (worlds, worldNames) = Sheets.SortedWorldsOnDatacenter(player);
 
                     using (ImRaii.ItemWidth(ImGui.GetWindowWidth() / 3f))
                     {
@@ -181,27 +189,44 @@ public sealed class Tabs : ISettingsTab
 
                         ImGui.SameLine();
 
-                        var selectedWorld = worlds.FindIndex(world => world.RowId == tab.TellTarget.World);
-                        if (selectedWorld == -1)
-                            selectedWorld = 0;
-
-                        using (var combo = ImRaii.Combo("###player-world", worlds[selectedWorld].Name.ToString()))
+                        // TC note: worlds 有可能是空集合(查詢異常、資料來源缺漏等),
+                        // 空集合上直接索引 worlds[0] 或呼叫 .First() 會丟例外,
+                        // 而這段程式碼在密語分頁被畫的時候每幀都會執行,一旦丟例外就是每幀當機。
+                        if (worlds.Count == 0)
                         {
-                            if (combo.Success)
+                            using var _ = ImRaii.Disabled();
+                            using var combo = ImRaii.Combo("###player-world", Language.Options_Tabs_NoWorldsAvailable);
+                        }
+                        else
+                        {
+                            var selectedWorld = 0;
+                            for (var w = 0; w < worlds.Count; w++)
                             {
-                                var lastDc = worlds.First().DataCenter.RowId;
-                                foreach (var (idx, world) in worlds.Index())
+                                if (worlds[w].RowId == tab.TellTarget.World)
                                 {
-                                    if (lastDc != world.DataCenter.RowId)
-                                    {
-                                        lastDc = world.DataCenter.RowId;
-                                        ImGui.Separator();
-                                    }
+                                    selectedWorld = w;
+                                    break;
+                                }
+                            }
 
-                                    if (ImGui.Selectable(world.Name.ToString(), selectedWorld == idx))
+                            using (var combo = ImRaii.Combo("###player-world", worldNames[selectedWorld]))
+                            {
+                                if (combo.Success)
+                                {
+                                    var lastDc = worlds.First().DataCenter.RowId;
+                                    foreach (var (idx, world) in worlds.Index())
                                     {
-                                        selectedWorld = idx;
-                                        tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        if (lastDc != world.DataCenter.RowId)
+                                        {
+                                            lastDc = world.DataCenter.RowId;
+                                            ImGui.Separator();
+                                        }
+
+                                        if (ImGui.Selectable(worldNames[idx], selectedWorld == idx))
+                                        {
+                                            selectedWorld = idx;
+                                            tab.TellTarget.World = worlds[selectedWorld].RowId;
+                                        }
                                     }
                                 }
                             }
@@ -220,14 +245,23 @@ public sealed class Tabs : ISettingsTab
                 }
             }
 
+            ImGuiUtil.MessageFilterEditor("tab-filters", Language.Options_MessageFilters_Tab_Name, Language.Options_MessageFilters_Tab_Description, tab.MessageFilters);
+
             using var disabled = ImRaii.Disabled(tab.Channel == InputChannel.Tell);
             ImGuiUtil.ChannelSelector(Language.Options_Tabs_Channels, tab.SelectedChannels);
             if (tab.Channel == InputChannel.Tell && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                // 還在上面的 ImRaii.Disabled 區段內，不把 Alpha 推回 1 說明框會跟著變淡。
+                using var tooltipAlpha = ImRaii.PushStyle(ImGuiStyleVar.Alpha, 1f);
                 ImGui.SetTooltip(Language.Options_Tabs_TellTabChannelSelection);
+            }
 
             ImGuiUtil.ExtraChatSelector(Language.Options_Tabs_ExtraChatChannels, ref tab.ExtraChatAll, tab.ExtraChatChannels);
             if (tab.Channel == InputChannel.Tell && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                using var tooltipAlpha = ImRaii.PushStyle(ImGuiStyleVar.Alpha, 1f);
                 ImGui.SetTooltip(Language.Options_Tabs_TellTabChannelSelection);
+            }
         }
 
         if (toRemove > -1)

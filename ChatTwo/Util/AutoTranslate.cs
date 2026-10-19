@@ -5,6 +5,7 @@ using System.Text;
 using Dalamud.Game;
 using Dalamud.Utility;
 using Lumina.Excel;
+using Lumina.Text;
 using Lumina.Text.Payloads;
 using Lumina.Text.ReadOnly;
 using Pidgin;
@@ -306,8 +307,11 @@ public static class AutoTranslate
 
     private static byte[] CreateFixedTranslation(uint group, uint key)
     {
-        using var rssb = new RentedSeStringBuilder();
-        return rssb.Builder
+        // TC note: Lumina.Text.RentedSeStringBuilder (pooled/rented builder wrapper) doesn't
+        // exist at true API13 - plain non-pooled SeStringBuilder is the equivalent for this
+        // construction-only use site.
+        var builder = new SeStringBuilder();
+        return builder
             .BeginMacro(MacroCode.Fixed)
             .AppendUIntExpression(group - 1)
             .AppendUIntExpression(key)

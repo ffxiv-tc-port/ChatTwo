@@ -1,4 +1,5 @@
-﻿using Dalamud.Game.ClientState.Objects.SubKinds;
+﻿using ChatTwo.Util;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
 
@@ -35,9 +36,33 @@ public static class Sheets
         TerritorySheet.TryGetRow(Plugin.ClientState.TerritoryType, out var row) &&
         row.TerritoryIntendedUse.RowId is 41 or 61;
 
+    // TC note: 台服(繁中服)DataCenter=151(陸行鳥)底下的世界,World.IsPublic 官方資料
+    // 就是全部填 false(不是遺漏),單純用 IsPublic 篩選會讓密語分頁的世界下拉選單
+    // 在台服變成空集合。這裡額外放行正式的 8 個台服世界(4028 伊弗利特 ~ 4035 泰坦),
+    // 同一個 DataCenter 底下還有測試/內部伺服器(4000-4002、402x/403x 系列)要排除掉,
+    // 所以用固定的 rowid 範圍而不是整個 DataCenter 一起放行。
+    public static bool IsPublicOrTaiwan(World world) =>
+        world.IsPublic || TellRouting.IsTaiwanWorld(world.RowId);
+
     public static IEnumerable<World> WorldsOnDatacenter(IPlayerCharacter character)
     {
-        var dcRow = character.HomeWorld.Value.DataCenter.Value.Region.RowId;
-        return WorldSheet.Where(world => world.IsPublic && world.DataCenter.Value.Region.RowId == dcRow);
+        var dcRow = character.HomeWorld.Value.DataCenter.Value.Region;
+        return WorldSheet.Where(world => IsPublicOrTaiwan(world) && world.DataCenter.Value.Region == dcRow);
+    }
+
+    private static byte? SortedWorldsRegion;
+    private static (List<World> Worlds, string[] Names) SortedWorlds;
+
+    // 依資料中心降冪、再依名稱排好的世界與名稱；按角色所屬的區域記住，換區域才重算。只在 UI 執行緒呼叫。
+    public static (List<World> Worlds, string[] Names) SortedWorldsOnDatacenter(IPlayerCharacter character)
+    {
+        var region = character.HomeWorld.Value.DataCenter.Value.Region;
+        if (SortedWorldsRegion != region)
+        {
+            var worlds = WorldsOnDatacenter(character).OrderByDescending(world => world.DataCenter.RowId).ThenBy(world => world.Name.ToString()).ToList();
+            SortedWorlds = (worlds, [.. worlds.Select(world => world.Name.ToString())]);
+            SortedWorldsRegion = region;
+        }
+        return SortedWorlds;
     }
 }

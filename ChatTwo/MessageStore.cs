@@ -122,6 +122,16 @@ public class MessageStore : IDisposable
 
     private SqliteConnection Connection { get; set; }
 
+    // Built and prepared once instead of per message (that alone was over half of what storing a message
+    // allocated). Upserts come from the message thread and the debug injector thread, hence the lock.
+    private readonly object UpsertLock = new();
+    private SqliteCommand? UpsertCommand;
+
+    private long removals;
+
+    /// <summary>Bumped after every change that takes rows out, so a refill can tell its query window may have moved back.</summary>
+    public long Removals => Interlocked.Read(ref removals);
+
     public static readonly MessagePackSerializerOptions MsgPackOptions = MessagePackSerializerOptions.Standard
         .WithResolver(CompositeResolver.Create([new PayloadMessagePackFormatter(), new SeStringMessagePackFormatter()], [StandardResolver.Instance]));
 
@@ -133,13 +143,18 @@ public class MessageStore : IDisposable
         Migrate();
     }
 
+    // Close() releases the file only if no command made on Connection is still waiting for its
+    // finalizer, so every command is disposed where it is used (reader ones by MessageEnumerator).
     public void Dispose()
     {
+        lock (UpsertLock)
+        {
+            UpsertCommand?.Dispose();
+            UpsertCommand = null;
+        }
+
         Connection.Close();
         Connection.Dispose();
-        // Closing the connection doesn't immediately release the file.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
     }
 
     private SqliteConnection Connect()
@@ -340,6 +355,7 @@ public class MessageStore : IDisposable
     public void ClearMessages()
     {
         Connection.Execute("DELETE FROM messages;");
+        Interlocked.Increment(ref removals);
         PerformMaintenance();
     }
 
@@ -365,7 +381,46 @@ public class MessageStore : IDisposable
 
     public void UpsertMessage(Message message)
     {
-        using var cmd = Connection.CreateCommand();
+        var sender = MessagePackSerializer.Serialize(message.Sender, MsgPackOptions);
+        var content = MessagePackSerializer.Serialize(message.Content, MsgPackOptions);
+        var senderSource = MessagePackSerializer.Serialize(message.SenderSource, MsgPackOptions);
+        var contentSource = MessagePackSerializer.Serialize(message.ContentSource, MsgPackOptions);
+
+        lock (UpsertLock)
+        {
+            var cmd = UpsertCommand ??= CreateUpsertCommand();
+            var parameters = cmd.Parameters;
+            parameters[0].Value = message.Id;
+            parameters[1].Value = message.Receiver;
+            parameters[2].Value = message.ContentId;
+            parameters[3].Value = message.Date.ToUnixTimeMilliseconds();
+            parameters[4].Value = message.Code.Type;
+            parameters[5].Value = message.Code.Source;
+            parameters[6].Value = message.Code.Target;
+            parameters[7].Value = sender;
+            parameters[8].Value = content;
+            parameters[9].Value = senderSource;
+            parameters[10].Value = contentSource;
+            parameters[11].Value = message.ExtraChatChannel;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+            }
+            catch
+            {
+                // The next message starts from a fresh command, as every message did before the reuse.
+                UpsertCommand = null;
+                cmd.Dispose();
+                throw;
+            }
+        }
+    }
+
+    // Parameter order is the index order UpsertMessage assigns in.
+    private SqliteCommand CreateUpsertCommand()
+    {
+        var cmd = Connection.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO messages (
                 Id,
@@ -411,20 +466,14 @@ public class MessageStore : IDisposable
                 Deleted = false;
         ";
 
-        cmd.Parameters.AddWithValue("$Id", message.Id);
-        cmd.Parameters.AddWithValue("$Receiver", message.Receiver);
-        cmd.Parameters.AddWithValue("$ContentId", message.ContentId);
-        cmd.Parameters.AddWithValue("$Date", message.Date.ToUnixTimeMilliseconds());
-        cmd.Parameters.AddWithValue("$ChatType", message.Code.Type);
-        cmd.Parameters.AddWithValue("$SourceKind", message.Code.Source);
-        cmd.Parameters.AddWithValue("$TargetKind", message.Code.Target);
-        cmd.Parameters.AddWithValue("$Sender", MessagePackSerializer.Serialize(message.Sender, MsgPackOptions));
-        cmd.Parameters.AddWithValue("$Content", MessagePackSerializer.Serialize(message.Content, MsgPackOptions));
-        cmd.Parameters.AddWithValue("$SenderSource", MessagePackSerializer.Serialize(message.SenderSource, MsgPackOptions));
-        cmd.Parameters.AddWithValue("$ContentSource", MessagePackSerializer.Serialize(message.ContentSource, MsgPackOptions));
-        cmd.Parameters.AddWithValue("$ExtraChatChannel", message.ExtraChatChannel);
+        foreach (var name in (string[])["$Id", "$Receiver", "$ContentId", "$Date", "$ChatType", "$SourceKind", "$TargetKind", "$Sender", "$Content", "$SenderSource", "$ContentSource", "$ExtraChatChannel"])
+        {
+            var parameter = cmd.CreateParameter();
+            parameter.ParameterName = name;
+            cmd.Parameters.Add(parameter);
+        }
 
-        cmd.ExecuteNonQuery();
+        return cmd;
     }
 
     /// <summary>
@@ -433,7 +482,9 @@ public class MessageStore : IDisposable
     /// <param name="receiver">The receiver content ID to filter by. If null, no filtering is performed.</param>
     /// <param name="since">Only show messages since this date. If null, no filtering is performed.</param>
     /// <param name="count">The amount to return. Defaults to 10,000.</param>
-    public MessageEnumerator GetMostRecentMessages(ulong? receiver = null, DateTimeOffset? since = null, int count = MessageQueryLimit)
+    /// <param name="only">When set, rows not in it are skipped without being parsed; the rows, their order and the
+    /// window they are taken from are the same as without it.</param>
+    public MessageEnumerator GetMostRecentMessages(ulong? receiver = null, DateTimeOffset? since = null, int count = MessageQueryLimit, RowSet? only = null)
     {
         List<string> whereClauses = ["deleted = false"];
         if (receiver != null)
@@ -478,7 +529,20 @@ public class MessageStore : IDisposable
 
         cmd.Parameters.AddWithValue("$Count", count);
 
-        return new MessageEnumerator(cmd.ExecuteReader());
+        return Enumerate(cmd, only);
+    }
+
+    private static MessageEnumerator Enumerate(SqliteCommand cmd, RowSet? only = null)
+    {
+        try
+        {
+            return new MessageEnumerator(cmd.ExecuteReader(), cmd) { Only = only };
+        }
+        catch
+        {
+            cmd.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -490,6 +554,7 @@ public class MessageStore : IDisposable
         cmd.CommandText = "UPDATE messages SET Deleted = true WHERE Id = $Id;";
         cmd.Parameters.AddWithValue("$Id", id);
         cmd.ExecuteNonQuery();
+        Interlocked.Increment(ref removals);
     }
 
     public long CountDateRange(DateTime after, DateTime before, IEnumerable<byte> channels, ulong? receiver = null)
@@ -559,7 +624,7 @@ public class MessageStore : IDisposable
         cmd.Parameters.AddWithValue("$After", ((DateTimeOffset) after).ToUnixTimeMilliseconds());
         cmd.Parameters.AddWithValue("$Before", ((DateTimeOffset) before).ToUnixTimeMilliseconds());
 
-        return new MessageEnumerator(cmd.ExecuteReader());
+        return Enumerate(cmd);
     }
 
     public MessageEnumerator GetPagedDateRange(DateTime after, DateTime before, IEnumerable<byte> channels, ulong? receiver = null, int page = 0)
@@ -605,11 +670,34 @@ public class MessageStore : IDisposable
         cmd.Parameters.AddWithValue("$Offset", DbViewer.RowPerPage * page);
         cmd.Parameters.AddWithValue("$OffsetCount", DbViewer.RowPerPage);
 
-        return new MessageEnumerator(cmd.ExecuteReader());
+        return Enumerate(cmd);
     }
 }
 
-public class MessageEnumerator(DbDataReader reader) : IEnumerable<Message>, IDisposable, IAsyncDisposable
+/// <summary>
+/// Rows picked by id. The stored date of each is kept as well: reading a row's id allocates (it is stored as text),
+/// its date does not, so nearly every row is ruled out by date alone.
+/// </summary>
+public sealed class RowSet
+{
+    private readonly HashSet<Guid> Ids = [];
+    private readonly HashSet<long> Dates = [];
+
+    public int Count => Ids.Count;
+
+    public void Add(Guid id, long unixMilliseconds)
+    {
+        Ids.Add(id);
+        Dates.Add(unixMilliseconds);
+    }
+
+    public bool MayHold(long unixMilliseconds) => Dates.Contains(unixMilliseconds);
+
+    public bool Holds(Guid id) => Ids.Contains(id);
+}
+
+/// <summary>Owns both the reader and the command that produced it; disposing it disposes both.</summary>
+public class MessageEnumerator(DbDataReader reader, DbCommand command) : IEnumerable<Message>, IDisposable, IAsyncDisposable
 {
     private const int MaxErrorLogs = 10;
 
@@ -619,10 +707,16 @@ public class MessageEnumerator(DbDataReader reader) : IEnumerable<Message>, IDis
     private int FailedCount;
     public bool DidError => FailedCount > 0;
 
+    /// <summary>Rows with a readable id and date not in this set are passed over unparsed; null reads every row.</summary>
+    public RowSet? Only { get; init; }
+
     public IEnumerator<Message> GetEnumerator()
     {
         while (reader.Read())
         {
+            if (Only != null && !Wanted(Only))
+                continue;
+
             var id = Guid.Empty;
             Message msg;
             try
@@ -663,6 +757,19 @@ public class MessageEnumerator(DbDataReader reader) : IEnumerable<Message>, IDis
         return GetEnumerator();
     }
 
+    // A read that throws falls through to the parse below, which then fails and counts the row as without the filter.
+    private bool Wanted(RowSet only)
+    {
+        try
+        {
+            return only.MayHold(reader.GetInt64(3)) && only.Holds(reader.GetGuid(0));
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+    }
+
     public IReadOnlyList<Guid> FailedMessageIds()
     {
         return FailedIds;
@@ -671,9 +778,11 @@ public class MessageEnumerator(DbDataReader reader) : IEnumerable<Message>, IDis
     public void Dispose()
     {
         reader.Dispose();
+        command.Dispose();
     }
     public async ValueTask DisposeAsync()
     {
         await reader.DisposeAsync();
+        await command.DisposeAsync();
     }
 }

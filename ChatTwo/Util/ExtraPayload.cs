@@ -10,6 +10,10 @@ public class ColorPayload
 
     public static ColorPayload? From(byte[] data)
     {
+        // Every raw payload of a message comes through here and most are not colours: answer those without a stream.
+        if (data.Length < 2 || data[0] != StartByte || data[1] != 0x13)
+            return null;
+
         using var stream = new MemoryStream(data);
         if (stream.ReadByte() != StartByte || stream.ReadByte() != 0x13)
             return null;

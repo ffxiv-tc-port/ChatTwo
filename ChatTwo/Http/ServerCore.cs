@@ -1,5 +1,6 @@
 ﻿using ChatTwo.Http.MessageProtocol;
 using ChatTwo.Ui.Handler;
+using ChatTwo.Util;
 using Dalamud.Plugin.Services;
 
 namespace ChatTwo.Http;
@@ -31,8 +32,11 @@ public class ServerCore : IAsyncDisposable
 
     private void FrameworkUpdate(IFramework _)
     {
-        foreach (var (idx, tab) in Plugin.Config.Tabs.Index())
+        // Every frame: an index loop, because Index() allocates an iterator and a boxed list enumerator per call.
+        var tabs = Plugin.Config.Tabs;
+        for (var idx = 0; idx < tabs.Count; idx++)
         {
+            var tab = tabs[idx];
             if (tab.Unread == tab.LastSendUnread)
                 continue;
 
@@ -45,6 +49,14 @@ public class ServerCore : IAsyncDisposable
     #region SSE Helper
     public async Task PrepareNewClient(SSEConnection sse)
     {
+        // 🔴🔴 新的 SSE 連線是從 HTTP 伺服器的執行緒進來的（RouteController.NewSSEConnection），
+        //    而這一支底下兩段都會轉派給 framework 執行緒，並且會讀原生記憶體（通訊貝名稱、截圖模式下的 LocalPlayer）。
+        //    卸載期 RunOnFrameworkThread／無延遲的 RunOnTick 會就地在 HTTP 執行緒上跑它們 ＝ 攔不到的 AccessViolation。
+        // 🔑 卸載期直接不準備這個客戶端：網頁端只會看到一條沒有初始資料的連線，而遊戲下一刻就要關了。
+        // 📌 SendNewLogin() 那條路徑是從 framework 執行緒進來的，閘門不會觸發。
+        if (FrameworkUnloadGuard.ShouldSkip("網頁介面初始化新的 SSE 連線"))
+            return;
+
         // This takes long, so keep it outside the next frame
         var messages = await HostContext.Processing.GetAllMessages();
 
@@ -64,6 +76,14 @@ public class ServerCore : IAsyncDisposable
     public void SendNewMessage(Message message)
     {
         if (!HostContext.IsActive)
+            return;
+
+        // 🔴🔴 這一支是從 MessageManager.ProcessPendingMessages 進來的，那是一條自己的背景執行緒，
+        //    不是 framework 執行緒。無延遲的 RunOnTick 在卸載期會就地在那條執行緒上執行委派，而
+        //    ReadMessageContent → ProcessChunk 在「截圖模式」開著時會讀 Plugin.PlayerState（ObjectTable.LocalPlayer）
+        //    ＝ 從別的執行緒對隨時可能被換掉的原生指標解參考，是下面的 catch 攔不到的 AccessViolation。
+        // 🔑 卸載期跳過這一則 SSE 推播：客戶端頂多少收到最後一兩行聊天，而它們馬上也會斷線。
+        if (FrameworkUnloadGuard.ShouldSkip("網頁介面推播新聊天訊息"))
             return;
 
         try

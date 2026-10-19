@@ -91,6 +91,9 @@ public unsafe class KeybindManager : IDisposable {
         ["CMD_BEGINNER_ALWAYS"] = new(InputChannel.NoviceNetwork, true)
     };
 
+    // Walked every 5 seconds; an array, because enumerating the keys through IReadOnlyDictionary boxes an enumerator.
+    private static readonly string[] InterceptedNames = [.. KeybindsToIntercept.Keys];
+
     // List of keys that can be used as a part of keybinds while the chat is
     // focused WITHOUT modifiers. All other keys can only be used if their
     // configured keybind contains modifiers (except only SHIFT). This allows
@@ -311,7 +314,7 @@ public unsafe class KeybindManager : IDisposable {
 
     private void UpdateKeybinds()
     {
-        foreach (var name in KeybindsToIntercept.Keys)
+        foreach (var name in InterceptedNames)
             Keybinds[name] = GetKeybind(name);
     }
 
@@ -389,8 +392,20 @@ public unsafe class KeybindManager : IDisposable {
             LastRefresh = Environment.TickCount64;
         }
 
+        // Runs on every Framework.Update tick. RaptureAtkModule.Instance() is the hand-written chained
+        // kind: null whenever the UI module is not built (before login, during logout), and it throws if
+        // a signature underneath fails to resolve - every frame, which is what the throttled log is for.
+        // Degradation: we cannot tell whether the vanilla text box has focus, so we treat it as focused
+        // and hand this tick's keys back to the game (fail-closed: never swallow the player's typing).
+        var atkModule = Chat.ResolveOrNull<RaptureAtkModule>(&RaptureAtkModule.Instance, "KeybindManager/atkModule", "Could not resolve RaptureAtkModule; keybind interception is paused this frame");
+        if (atkModule == null)
+        {
+            VanillaTextInputHasFocus = true;
+            return;
+        }
+
         // Vanilla text input has focus
-        if (RaptureAtkModule.Instance()->AtkModule.IsTextInputActive())
+        if (atkModule->AtkModule.IsTextInputActive())
         {
             VanillaTextInputHasFocus = true;
             return;
@@ -400,9 +415,10 @@ public unsafe class KeybindManager : IDisposable {
         // keys so we don't try to process them immediately on the next frame.
         if (VanillaTextInputHasFocus)
         {
-            foreach (var key in Plugin.KeyState.GetValidVirtualKeys())
-                if (key is not VirtualKey.CONTROL and not VirtualKey.SHIFT and not VirtualKey.MENU)
-                    Plugin.KeyState[key] = false;
+            if (Plugin.Config.InterceptKeybinds)
+                foreach (var key in Plugin.KeyState.GetValidVirtualKeys())
+                    if (key is not VirtualKey.CONTROL and not VirtualKey.SHIFT and not VirtualKey.MENU)
+                        Plugin.KeyState[key] = false;
             VanillaTextInputHasFocus = false;
             return;
         }
@@ -423,6 +439,19 @@ public unsafe class KeybindManager : IDisposable {
             Plugin.ChatLog.ChangeTabDelta(-1);
             return;
         }
+
+        // Hand the game's chat keybinds back to the vanilla chat input when
+        // interception is disabled. ChatTwo's own tab keybinds above still work.
+        if (!Plugin.Config.InterceptKeybinds)
+            return;
+
+        // A tab with input disabled deliberately falls back to the native chat log - the
+        // addon-visibility restore in Plugin.DrawUi and ChatLogRefreshDetour's early return are the
+        // other two halves of that decision. Interception must stop too: otherwise Enter and the slash
+        // keys are swallowed while the native box is the only place left to type. Every tab being
+        // input-disabled is a supported configuration, so this cannot be left to the InterceptKeybinds toggle.
+        if (Plugin.CurrentTab.InputDisabled)
+            return;
 
         // Only process the active combo with the most modifiers.
         var currentBest = (VirtualKey.NO_KEY, "", 0);
@@ -465,12 +494,45 @@ public unsafe class KeybindManager : IDisposable {
         }
     }
 
+    // Called for all ~60 intercepted keybinds every 5 seconds from HandleKeybinds.
+    // UIInputData.Instance() is the chained kind (both failure modes) and GetKeybindByName is
+    // [MemberFunction]. Resolve before allocating so the early return cannot leak the string;
+    // Utf8String.FromString can throw too, so it is inside the try and the Dtor is in a finally.
+    // Degradation: an all-default Keybind (NO_KEY never matches), so the key falls through to the game.
     private static Keybind GetKeybind(string id)
     {
+        var inputData = Chat.ResolveOrNull<UIInputData>(&UIInputData.Instance, "KeybindManager/inputData", "Could not resolve UIInputData; game keybinds could not be read and will not be intercepted");
+        if (inputData == null)
+            return new Keybind();
+
         var outData = new FFXIVClientStructs.FFXIV.Client.System.Input.Keybind();
-        var idString = Utf8String.FromString(id);
-        UIInputData.Instance()->GetKeybindByName(idString, &outData);
-        idString->Dtor(true);
+        Utf8String* idString;
+        try
+        {
+            idString = Utf8String.FromString(id);
+        }
+        catch (Exception ex)
+        {
+            Chat.LogErrorThrottled("KeybindManager/alloc", ex, "Could not allocate the keybind name string; game keybinds will not be intercepted");
+            return new Keybind();
+        }
+
+        if (idString == null)
+            return new Keybind();
+
+        try
+        {
+            inputData->GetKeybindByName(idString, &outData);
+        }
+        catch (Exception ex)
+        {
+            Chat.LogErrorThrottled("KeybindManager/getKeybind", ex, $"Could not read the game keybind '{id}'");
+            return new Keybind();
+        }
+        finally
+        {
+            idString->Dtor(true);
+        }
 
         var key1 = outData.KeySettings[0];
         var key2 = outData.KeySettings[1];

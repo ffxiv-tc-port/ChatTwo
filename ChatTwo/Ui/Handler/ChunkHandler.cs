@@ -19,7 +19,7 @@ public class ChunkHandler
 
     public void DrawChunks(IReadOnlyList<Chunk> chunks, bool wrap = true, PayloadHandler? handler = null, float lineWidth = 0f)
     {
-        using var style = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
+        using var style = new StyleVarScope(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         for (var i = 0; i < chunks.Count; i++)
         {
@@ -43,12 +43,14 @@ public class ChunkHandler
         }
     }
 
+    public const string IconTexture = "common/font/fonticon_ps5.tex";
+
     public void DrawIcon(Chunk chunk, IconChunk icon, PayloadHandler? handler)
     {
         if (!IconUtil.GfdFileView.TryGetEntry((uint) icon.Icon, out var entry))
             return;
 
-        var iconTexture = Plugin.TextureProvider.GetFromGame("common/font/fonticon_ps5.tex").GetWrapOrDefault();
+        var iconTexture = Plugin.TextureProvider.GetFromGame(IconTexture).GetWrapOrDefault();
         if (iconTexture == null)
             return;
 
@@ -109,7 +111,7 @@ public class ChunkHandler
                 : ColourUtil.RgbaToVector4(type.DefaultColor());
         }
 
-        using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, color);
+        using var pushedColor = new StyleColorScope(ImGuiCol.Text, color ?? default, color != null);
 
         var disposableFont = Plugin.Config.FontsEnabled && Plugin.FontManager.ItalicFont != null
             ? Plugin.FontManager.ItalicFont

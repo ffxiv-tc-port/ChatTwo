@@ -45,6 +45,9 @@ public class InputHandler
 
     public readonly string InputHandlerId;
 
+    // Draw thread only. Passing the method itself would build a new delegate for the input box on every frame.
+    private ImGui.ImGuiInputTextCallbackDelegate? InputCallback;
+
     public InputHandler(IChatWindow mainWindow, Plugin plugin, string id)
     {
         MainWindow = mainWindow;
@@ -84,7 +87,7 @@ public class InputHandler
             inputColour = ecColour;
 
         var push = inputColour != null;
-        using (ImRaii.PushColor(ImGuiCol.Text, push ? ColourUtil.RgbaToAbgr(inputColour!.Value) : 0, push))
+        using (new StyleColorScope(ImGuiCol.Text, push ? ColourUtil.RgbaToAbgr(inputColour!.Value) : 0, push))
         {
             var isChatEnabled = activeTab is { InputDisabled: false };
             if (isChatEnabled && (Activate || FocusedPreview))
@@ -94,11 +97,11 @@ public class InputHandler
             }
 
             var chatCopy = ChatInput;
-            using (ImRaii.Disabled(!isChatEnabled))
+            using (EndScope.Disabled(!isChatEnabled))
             {
                 var flags = InputFlags | (!isChatEnabled ? ImGuiInputTextFlags.ReadOnly : ImGuiInputTextFlags.None);
                 ImGui.SetNextItemWidth(inputWidth);
-                ImGui.InputTextWithHint("##chat2-input", isChatEnabled ? "": Language.ChatLog_DisabledInput, ref ChatInput, 500, flags, Callback);
+                ImGui.InputTextWithHint("##chat2-input", isChatEnabled ? "": Language.ChatLog_DisabledInput, ref ChatInput, 500, flags, InputCallback ??= Callback);
             }
             var inputActive = ImGui.IsItemActive();
             InputFocused = isChatEnabled && inputActive;
@@ -160,9 +163,9 @@ public class InputHandler
                 }
             }
 
-            using (var context = ImRaii.ContextPopupItem("ChatInputContext"))
+            using (var context = EndScope.ContextPopupItem("ChatInputContext"))
             {
-                if (context)
+                if (context.Success)
                 {
                     using var pushedColor = ImRaii.PushColor(ImGuiCol.Text, normalColor);
                     if (ImGui.Selectable(Language.ChatLog_HideChat))

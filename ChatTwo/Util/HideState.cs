@@ -16,15 +16,21 @@ public static class HideStateHelper
         if (current.CurrentHideState is HideState.Battle && !Plugin.InBattle)
             current.CurrentHideState = HideState.None;
 
+        var inCutscene = Plugin.CutsceneActive || Plugin.GposeActive;
+
+        // Closes the cutscene diagnostics episode; a single bool check when nothing is being watched.
+        if (!inCutscene)
+            Chat.CutsceneConditionEnded();
+
         // if the chat has no hide state and in a cutscene, set the hide state to cutscene
-        if (hideDuringCutscenes && current.CurrentHideState is HideState.None && (Plugin.CutsceneActive || Plugin.GposeActive))
+        if (hideDuringCutscenes && current.CurrentHideState is HideState.None && inCutscene)
         {
             if (Chat.CheckHideFlags())
                 current.CurrentHideState = HideState.Cutscene;
         }
 
         // if the chat is hidden because of a cutscene and no longer in a cutscene, set the hide state to none
-        if (current.CurrentHideState is HideState.Cutscene or HideState.CutsceneOverride && !Plugin.CutsceneActive && !Plugin.GposeActive)
+        if (current.CurrentHideState is HideState.Cutscene or HideState.CutsceneOverride && !inCutscene)
             current.CurrentHideState = HideState.None;
 
         // if the chat is hidden because of a cutscene and the chat has been activated, show chat

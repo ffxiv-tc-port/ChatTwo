@@ -12,6 +12,9 @@ public class CommandHelpWindow : Window {
     private ChatLog.ChatLog ChatLogWindow { get; }
     private ReadOnlySeString? CommandDescription { get; set; }
 
+    // Draw thread only. Built from CommandDescription on first draw; the input callback re-sends the same text every frame.
+    private List<Chunk>? DescriptionChunks;
+
     public CommandHelpWindow(ChatLog.ChatLog chatLogWindow) : base("command help##chat2-commandhelp")
     {
         ChatLogWindow = chatLogWindow;
@@ -26,7 +29,11 @@ public class CommandHelpWindow : Window {
     // Sets IsOpen to true if it should be drawn
     public void UpdateContent(ReadOnlySeString commandDesc)
     {
-        CommandDescription = commandDesc;
+        if (CommandDescription is not { } shown || !shown.Equals(commandDesc))
+        {
+            CommandDescription = commandDesc;
+            DescriptionChunks = null;
+        }
 
         var width = 350;
         var scaledWidth = width * ImGuiHelpers.GlobalScale;
@@ -59,6 +66,7 @@ public class CommandHelpWindow : Window {
         if (CommandDescription == null)
             return;
 
-        ChatLogWindow.InputHandler.ChunkHandler.DrawChunks(ChunkUtil.ToChunks(CommandDescription.Value.ToDalamudString(), ChunkSource.None, null).ToList());
+        DescriptionChunks ??= ChunkUtil.ToChunks(CommandDescription.Value.ToDalamudString(), ChunkSource.None, null).ToList();
+        ChatLogWindow.InputHandler.ChunkHandler.DrawChunks(DescriptionChunks);
     }
 }

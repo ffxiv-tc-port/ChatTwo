@@ -12,7 +12,6 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface;
 using Dalamud.Interface.Style;
 using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Dalamud.Bindings.ImGui;
@@ -38,14 +37,28 @@ public partial class ChatLog : Window, IChatWindow
 
     private bool DrewThisFrame;
 
+    // Environment.TickCount64 at which an unlocked tab's default channel is re-applied after login; 0 = none pending.
+    private long ApplyDefaultChannelAtMs;
+
     public bool IsHidden;
     public HideState CurrentHideState { get; set; } = HideState.None;
+
+    // Plugin.CurrentTab hands back a throwaway `new Tab()` when LastTab is out of range, so
+    // anything written through it is silently lost. Context menus need the real object or null.
+    public Tab? ContextTab
+    {
+        get
+        {
+            var idx = Plugin.LastTab;
+            return idx > -1 && idx < Plugin.Config.Tabs.Count ? Plugin.Config.Tabs[idx] : null;
+        }
+    }
 
     public Vector2 LastWindowPos { get; set; } = Vector2.Zero;
     public Vector2 LastWindowSize { get; set; } = Vector2.Zero;
 
     public readonly List<bool> PopOutDocked = [];
-    public readonly HashSet<Guid> PopOutWindows = [];
+    public readonly Dictionary<Guid, Popout> PopOutWindows = [];
 
     public ChatLog(Plugin plugin) : base($"{Plugin.PluginName}###chat2")
     {
@@ -85,20 +98,37 @@ public partial class ChatLog : Window, IChatWindow
 
     private void Logout(int _, int __)
     {
+        // Tabs are wiped on logout so the next character does not inherit this one's messages -
+        // FilterAllTabs only ever adds (AddSortPrune dedupes by Message.Id), so nothing else
+        // would take them back out. That isolation is precisely what this option turns off.
+        if (Plugin.Config.CrossCharacterMessages)
+            return;
+
         Plugin.MessageManager.ClearAllTabs();
     }
 
     private void Login()
     {
-        Plugin.MessageManager.FilterAllTabsAsync();
+        Plugin.MessageManager.RefillAfterLoginAsync();
+        // Delayed because the game restores its own channel during login and would overwrite ours.
+        ApplyDefaultChannelAtMs = Environment.TickCount64 + 3000;
     }
 
     public unsafe void Activated(ChatActivatedArgs args)
     {
+        // A tab popped out into its own window has its own InputHandler; the main
+        // window's InputHandler is never drawn/focused for it. Route activation to
+        // whichever one is actually on screen for the current tab, or the "Enter to
+        // chat" hotkey would silently type into (and send from) a hidden/unfocused
+        // main-window input box instead of the popout the user is looking at.
+        var activeInput = Plugin.CurrentTab.PopOut && PopOutWindows.TryGetValue(Plugin.CurrentTab.Identifier, out var popout)
+            ? popout.InputHandler
+            : InputHandler;
+
         TellSpecial = args.TellSpecial;
 
-        InputHandler.Activate = true;
-        InputHandler.PlayedClosingSound = false;
+        activeInput.Activate = true;
+        activeInput.PlayedClosingSound = false;
         if (Plugin.Config.PlaySounds)
             UIGlobals.PlaySoundEffect(InputHandler.ChatOpenSfx);
 
@@ -106,26 +136,26 @@ public partial class ChatLog : Window, IChatWindow
         if (Plugin.CurrentTab.InputDisabled)
         {
             // The closing sound would've been immediately played in this case.
-            InputHandler.PlayedClosingSound = true;
+            activeInput.PlayedClosingSound = true;
             return;
         }
 
-        if (args.AddIfNotPresent != null && !InputHandler.ChatInput.Contains(args.AddIfNotPresent))
+        if (args.AddIfNotPresent != null && !activeInput.ChatInput.Contains(args.AddIfNotPresent))
         {
             // Replace the full chat input if it's a command
             if (args.AddIfNotPresent.StartsWith('/'))
-                InputHandler.ChatInput = args.AddIfNotPresent;
+                activeInput.ChatInput = args.AddIfNotPresent;
             else
-                InputHandler.ChatInput += args.AddIfNotPresent;
+                activeInput.ChatInput += args.AddIfNotPresent;
         }
 
         if (args.Input != null)
         {
             // Replace the full chat input if it's a command
             if (args.Input.StartsWith('/'))
-                InputHandler.ChatInput = args.Input;
+                activeInput.ChatInput = args.Input;
             else
-                InputHandler.ChatInput += args.Input;
+                activeInput.ChatInput += args.Input;
         }
 
         var (info, reason, target) = (args.ChannelSwitchInfo, args.TellReason, args.TellTarget);
@@ -169,13 +199,21 @@ public partial class ChatLog : Window, IChatWindow
 
             if (info.Channel is InputChannel.Linkshell1 or InputChannel.CrossLinkshell1 && info.Rotate != RotateMode.None)
             {
-                var module = UIModule.Instance();
-
                 // If any of these operations fail, do nothing.
                 if (info.Permanent)
                 {
+                    // The module->LinkshellCycle reads below dereference the same pointer the Chat.Rotate*History
+                    // guards protect, so this needs Chat's shared helper too (try + null check, see Chat.ResolveOrNull).
+                    // Degradation: targetChannel becomes null, which routes into the existing "invalid value,
+                    // ignoring" path just below. Deliberately not falling back to the unrotated channel: the user
+                    // pressed a cycle keybind, so silently selecting linkshell 1 every time would be a wrong answer.
+                    var module = Chat.GetUIModuleOrNull("ChatLogActivated/uiModule", "Could not resolve UIModule; the linkshell channel was not rotated");
+                    if (module == null)
+                    {
+                        targetChannel = null;
+                    }
                     // Rotate using the game's code.
-                    if (info.Channel == InputChannel.Linkshell1)
+                    else if (info.Channel == InputChannel.Linkshell1)
                     {
                         Chat.RotateLinkshellHistory(info.Rotate);
                         targetChannel = info.Channel + (uint)module->LinkshellCycle;
@@ -209,8 +247,8 @@ public partial class ChatLog : Window, IChatWindow
             }
         }
 
-        if (info.Text != null && InputHandler.ChatInput.Length == 0)
-            InputHandler.ChatInput = info.Text;
+        if (info.Text != null && activeInput.ChatInput.Length == 0)
+            activeInput.ChatInput = info.Text;
     }
 
     public float GetRemainingHeightForMessageLog(bool supportsInputPreview)
@@ -293,26 +331,63 @@ public partial class ChatLog : Window, IChatWindow
             return true;
         }
 
+        // Equivalent to taking the max LastActivity over every non-popout tab that has UnhideOnActivity or
+        // is the current tab, plus InputHandler.LastActivityTime - without re-scanning Plugin.Config.Tabs
+        // every frame. MaxUnhideEligibleTabActivity is the running max for every tab except the
+        // "== currentTab" special case (see its comment); the current tab varies frame-to-frame, so it
+        // is checked live here, which is O(1).
         var currentTab = Plugin.CurrentTab; // local to avoid calling the getter repeatedly
-        var lastActivityTime = Plugin.Config.Tabs
-            .Where(tab => !tab.PopOut && (tab.UnhideOnActivity || tab == currentTab))
-            .Select(tab => tab.LastActivity)
-            .Append( InputHandler.LastActivityTime)
-            .Max();
+        var lastActivityTime = Plugin.Config.MaxUnhideEligibleTabActivity;
+        if (!currentTab.PopOut && currentTab.LastActivity > lastActivityTime)
+            lastActivityTime = currentTab.LastActivity;
+        if (InputHandler.LastActivityTime > lastActivityTime)
+            lastActivityTime = InputHandler.LastActivityTime;
+
         return  InputHandler.FrameTime - lastActivityTime <= 1000 * Plugin.Config.InactivityHideTimeout;
     }
 
+    // The visible "New tab | General | ..." strip is a real ImGui tab bar (DrawTabBar uses
+    // BeginTabBar/BeginTabItem), not the native title bar: TitleBg/TitleBgActive are kept for when
+    // ShowTitleBar is on, but the Tab* colours are what needs scaling for the strip most people see.
+    // ChildBg covers the message log itself: DrawMessageLog opens its own child window, which paints
+    // its own background independently of the outer window's BgAlpha/WindowBg.
+    private static readonly ImGuiCol[] OpacityScaledColours =
+    [
+        ImGuiCol.TitleBg, ImGuiCol.TitleBgActive, ImGuiCol.FrameBg, ImGuiCol.ChildBg,
+        ImGuiCol.Tab, ImGuiCol.TabHovered, ImGuiCol.TabActive, ImGuiCol.TabUnfocused, ImGuiCol.TabUnfocusedActive,
+    ];
+
     public override void PreDraw()
     {
+        // Dalamud's built-in per-window opacity (right-click title bar -> Opacity, and window presets)
+        // is applied by base.PreDraw pushing ImGuiStyleVar.Alpha; without this call that slider silently
+        // does nothing for this window. It goes first so our own pushes below nest inside it, and
+        // base.PostDraw pops last. It multiplies with ChatTwo's own WindowAlpha - intended, they are two
+        // independent controls.
+        base.PreDraw();
+
         if (Plugin.Config.KeepInputFocus &&  InputHandler.Activate)
             ImGui.SetWindowFocus(WindowName);
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Push();
+
+        // BgAlpha (set in PreOpenCheck) only ever affects ImGuiCol.WindowBg; the
+        // title bar and chat input frame use separate style colours that never
+        // respected the configured opacity, so scale them the same way here,
+        // after any theme override above so this always wins.
+        var alphaScale = Plugin.Config.WindowAlpha / 100f;
+        foreach (var col in OpacityScaledColours)
+        {
+            var c = ImGui.GetStyle().Colors[(int) col];
+            ImGui.PushStyleColor(col, new Vector4(c.X, c.Y, c.Z, c.W * alphaScale));
+        }
     }
 
     public override void PostDraw()
     {
+        ImGui.PopStyleColor(OpacityScaledColours.Length);
+
         // Set Activate to false after draw to avoid repeatedly trying to focus
         // the text input in a tab with input disabled. The usual way that
         // Activate gets disabled is via the text input callback, but that
@@ -322,6 +397,10 @@ public partial class ChatLog : Window, IChatWindow
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Pop();
+
+        // Pops the ImGuiStyleVar.Alpha that base.PreDraw pushed; must be last so the
+        // style stack unwinds in reverse order.
+        base.PostDraw();
     }
 
     public override void OnClose()
@@ -375,25 +454,35 @@ public partial class ChatLog : Window, IChatWindow
 
         var activeTab = Plugin.CurrentTab;
 
-        // This tab has a fixed channel, so we force this channel to be always set as current
-        if (activeTab.Channel is not null)
-            activeTab.CurrentChannel.SetChannel(activeTab.Channel.Value);
+        if (ApplyDefaultChannelAtMs != 0 && Environment.TickCount64 >= ApplyDefaultChannelAtMs)
+        {
+            // Skipped if the window was hidden for long: switching channel minutes after login would surprise the user.
+            var stale = Environment.TickCount64 - ApplyDefaultChannelAtMs > 30_000;
+            ApplyDefaultChannelAtMs = 0;
+            if (!stale && activeTab.Channel is not null && !activeTab.LockChannel)
+                Plugin.Functions.Chat.SetChannelWithExtraChat(activeTab.Channel);
+        }
+
+        // This tab has a locked channel, so we force this channel to be always set as current
+        var channelLocked = activeTab.Channel is not null && activeTab.LockChannel;
+        if (channelLocked)
+            activeTab.CurrentChannel.SetChannel(activeTab.Channel!.Value);
 
         if (Plugin.Config.PreviewPosition is PreviewPosition.Inside && Plugin.InputPreview.IsDrawable)
             Plugin.InputPreview.DrawPreview();
 
-        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
-            DrawChannelName(activeTab);
+        using (new StyleVarScope(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+            DrawChannelName(activeTab, true);
 
-        if (ImGuiUtil.IconButton(FontAwesomeIcon.Comment) && activeTab.Channel is null)
+        if (ImGuiUtil.IconButton(FontAwesomeIcon.Comment) && !channelLocked)
             ImGui.OpenPopup(ChatChannelPicker);
 
-        if (activeTab.Channel is not null && ImGui.IsItemHovered())
+        if (channelLocked && ImGui.IsItemHovered())
             ImGuiUtil.Tooltip(Language.ChatLog_SwitcherDisabled);
 
-        using (var popup = ImRaii.Popup(ChatChannelPicker))
+        using (var popup = EndScope.Popup(ChatChannelPicker))
         {
-            if (popup)
+            if (popup.Success)
             {
                 foreach (var (name, channel) in GetValidChannels())
                     if (ImGui.Selectable(name))
@@ -504,7 +593,7 @@ public partial class ChatLog : Window, IChatWindow
                     name = activeTab.CurrentChannel.TempChannel.ToChatType().Name();
                 }
 
-                channelNameChunks = [new TextChunk(ChunkSource.None, null, name)];
+                channelNameChunks = TextLabelOf(name);
             }
         }
         else if (activeTab.CurrentChannel.TellTarget?.IsSet() == true)
@@ -524,7 +613,7 @@ public partial class ChatLog : Window, IChatWindow
                 //
                 // We don't call channel.ToChatType().Name() as it has the
                 // long name as used in the settings window.
-                channelNameChunks = [new TextChunk(ChunkSource.None, null, channel.IsExtraChatLinkshell() ? $"ECLS [{channel.LinkshellIndex() + 1}]" : channel.ToChatType().Name())];
+                channelNameChunks = TextLabelOf(channel.IsExtraChatLinkshell() ? $"ECLS [{channel.LinkshellIndex() + 1}]" : channel.ToChatType().Name());
             }
         }
         else if (Plugin.ExtraChat.ChannelOverride is var (overrideName, _))
@@ -534,7 +623,7 @@ public partial class ChatLog : Window, IChatWindow
                 ? ""
                 : $" (Warning: {activeTab.CurrentChannel.Channel.ToChatType().Name()})";
 
-            channelNameChunks = [new TextChunk(ChunkSource.None, null, $"{overrideName}{warning}")];
+            channelNameChunks = TextLabelOf($"{overrideName}{warning}");
         }
         else if (PlayerUtil.ScreenshotMode && activeTab.CurrentChannel.Channel is InputChannel.Tell && activeTab.CurrentChannel.TellTarget != null)
         {
@@ -546,28 +635,38 @@ public partial class ChatLog : Window, IChatWindow
                     ? worldRow.Name.ToString()
                     : "???";
 
-                channelNameChunks =
-                [
-                    new TextChunk(ChunkSource.None, null, "Tell "),
-                    new TextChunk(ChunkSource.None, null, playerName),
-                    new IconChunk(ChunkSource.None, null, BitmapFontIcon.CrossWorld),
-                    new TextChunk(ChunkSource.None, null, world),
-                ];
+                channelNameChunks = TellLabelOf(playerName, world);
             }
             else
             {
                 // We still need to censor the name if we couldn't read valid data.
-                channelNameChunks = [new TextChunk(ChunkSource.None, null, "Tell")];
+                channelNameChunks = TextLabelOf("Tell");
             }
         }
         else
         {
             channelNameChunks = activeTab.CurrentChannel.Name.Count > 0
-                ? activeTab.CurrentChannel.Name.ToArray()
-                : [new TextChunk(ChunkSource.None, null, activeTab.CurrentChannel.Channel.ToChatType().Name())];
+                ? ChannelLabelCopy(activeTab.CurrentChannel.Name)
+                : TextLabelOf(activeTab.CurrentChannel.Channel.ToChatType().Name());
         }
 
         return channelNameChunks;
+    }
+
+    // Draw thread only. A channel's label list is replaced when the channel changes and never edited in place, so
+    // its copy is kept until another list shows up. Nobody writes to the copy.
+    private List<Chunk>? ChannelLabelSource;
+    private Chunk[] ChannelLabel = [];
+
+    private Chunk[] ChannelLabelCopy(List<Chunk> label)
+    {
+        if (!ReferenceEquals(label, ChannelLabelSource) || label.Count != ChannelLabel.Length)
+        {
+            ChannelLabelSource = label;
+            ChannelLabel = label.ToArray();
+        }
+
+        return ChannelLabel;
     }
 
     private Chunk[] GenerateTellTargetName(TellTarget tellTarget)
@@ -582,13 +681,45 @@ public partial class ChatLog : Window, IChatWindow
             ? worldRow.Name.ToString()
             : "???";
 
-        return
-        [
-            new TextChunk(ChunkSource.None, null, "Tell "),
-            new TextChunk(ChunkSource.None, null, playerName),
-            new IconChunk(ChunkSource.None, null, BitmapFontIcon.CrossWorld),
-            new TextChunk(ChunkSource.None, null, world)
-        ];
+        return TellLabelOf(playerName, world);
+    }
+
+    // Draw thread only. Labels below are a function of their text alone and nobody writes to them, so the last one
+    // is reused while the text stays the same instead of being rebuilt every frame.
+    private string? TextLabelText;
+    private Chunk[] TextLabel = [];
+    private string? TellLabelName;
+    private string? TellLabelWorld;
+    private Chunk[] TellLabel = [];
+
+    private Chunk[] TextLabelOf(string text)
+    {
+        text ??= "";
+        if (TextLabelText != text)
+        {
+            TextLabelText = text;
+            TextLabel = [new TextChunk(ChunkSource.None, null, text)];
+        }
+
+        return TextLabel;
+    }
+
+    private Chunk[] TellLabelOf(string playerName, string world)
+    {
+        if (TellLabelName != playerName || TellLabelWorld != world)
+        {
+            TellLabelName = playerName;
+            TellLabelWorld = world;
+            TellLabel =
+            [
+                new TextChunk(ChunkSource.None, null, "Tell "),
+                new TextChunk(ChunkSource.None, null, playerName),
+                new IconChunk(ChunkSource.None, null, BitmapFontIcon.CrossWorld),
+                new TextChunk(ChunkSource.None, null, world),
+            ];
+        }
+
+        return TellLabel;
     }
 
     public void UserHide()
@@ -598,65 +729,141 @@ public partial class ChatLog : Window, IChatWindow
 
     public void DrawMessageLog(Tab tab, PayloadHandler handler, float childHeight, bool switchedTab)
     {
-        using var child = ImRaii.Child("##chat2-messages", new Vector2(-1, childHeight));
+        using var child = EndScope.Child("##chat2-messages", new Vector2(-1, childHeight));
         if (!child.Success)
             return;
 
-        if (tab.DisplayTimestamp && Plugin.Config.PrettierTimestamps)
-            DrawLogTableStyle(tab, handler, switchedTab);
-        else
-            DrawLogNormalStyle(tab, handler, switchedTab);
+        var scrollForSwitch = switchedTab || OwedSwitchScroll == tab.Identifier;
+        var drawn = tab.DisplayTimestamp && Plugin.Config.PrettierTimestamps
+            ? DrawLogTableStyle(tab, handler, scrollForSwitch)
+            : DrawLogNormalStyle(tab, handler, scrollForSwitch);
+
+        if (drawn)
+        {
+            if (OwedSwitchScroll == tab.Identifier)
+                OwedSwitchScroll = null;
+
+            LogEndY[tab.Identifier] = ImGui.GetCursorPosY();
+            return;
+        }
+
+        // Skipped frame: an empty child would have its scroll clamped to the top next frame, so keep last frame's height.
+        var y = ImGui.GetCursorPosY();
+        if (LogEndY.TryGetValue(tab.Identifier, out var endY) && endY > y)
+            ImGui.Dummy(new Vector2(0, endY - y));
+
+        if (scrollForSwitch)
+            OwedSwitchScroll = tab.Identifier;
     }
 
-    private void DrawLogNormalStyle(Tab tab, PayloadHandler handler, bool switchedTab)
+    // Draw thread only. Where each tab's log content ended when last drawn, and a tab switch whose scroll is still owed.
+    private readonly Dictionary<Guid, float> LogEndY = [];
+    private Guid? OwedSwitchScroll;
+
+    // Another thread can hold the list for a while (reloading every tab), so the draw waits at most this long.
+    private const int MessageLockTimeoutMs = 3;
+
+    /// <returns>False when the message list was busy: nothing was drawn and nothing is held.</returns>
+    private bool DrawLogNormalStyle(Tab tab, PayloadHandler handler, bool switchedTab)
     {
-        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
-            DrawMessages(tab, handler, false);
+        // Released before the popups below: their actions can edit this list, and the lock is not reentrant.
+        using (var messages = tab.Messages.TryGetReadOnly(MessageLockTimeoutMs))
+        {
+            if (messages == null)
+                return false;
+
+            using (new StyleVarScope(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+                DrawMessages(tab, messages, handler, false);
+        }
 
         if (switchedTab || ImGui.GetScrollY() >= ImGui.GetScrollMaxY())
             ImGui.SetScrollHereY(1f);
 
         handler.Draw();
+        return true;
     }
 
-    private void DrawLogTableStyle(Tab tab, PayloadHandler handler, bool switchedTab)
+    /// <returns>False when the message list was busy: nothing was drawn and nothing is held.</returns>
+    private bool DrawLogTableStyle(Tab tab, PayloadHandler handler, bool switchedTab)
     {
-        var compact = Plugin.Config.MoreCompactPretty;
-        var oldItemSpacing = ImGui.GetStyle().ItemSpacing;
-        var oldCellPadding = ImGui.GetStyle().CellPadding;
+        // Taken before the table so a busy frame submits no table at all and its column widths stay as they were.
+        var messages = tab.Messages.TryGetReadOnly(MessageLockTimeoutMs);
+        if (messages == null)
+            return false;
 
-        using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
-        using (ImRaii.PushStyle(ImGuiStyleVar.CellPadding, oldCellPadding with { Y = 0 }, compact))
+        try
         {
-            using var table = ImRaii.Table("timestamp-table", 2, ImGuiTableFlags.PreciseWidths);
-            if (!table.Success)
-                return;
+            var compact = Plugin.Config.MoreCompactPretty;
+            var oldItemSpacing = ImGui.GetStyle().ItemSpacing;
+            var oldCellPadding = ImGui.GetStyle().CellPadding;
 
-            ImGui.TableSetupColumn("timestamps", ImGuiTableColumnFlags.WidthFixed);
-            ImGui.TableSetupColumn("messages", ImGuiTableColumnFlags.WidthStretch);
-
-            DrawMessages(tab, handler, true, compact, oldCellPadding.Y);
-
-            using (ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, oldItemSpacing))
-            using (ImRaii.PushStyle(ImGuiStyleVar.CellPadding, oldCellPadding))
+            using (new StyleVarScope(ImGuiStyleVar.ItemSpacing, Vector2.Zero))
+            using (new StyleVarScope(ImGuiStyleVar.CellPadding, oldCellPadding with { Y = 0 }, compact))
             {
-                // Custom styles can have cellPadding that go above 4, which GetScrollY isn't respecting
-                var cellPaddingOffset = !compact && oldCellPadding.Y > 4f ? oldCellPadding.Y - 4f : 0f;
-                if (switchedTab || ImGui.GetScrollY() + cellPaddingOffset >= ImGui.GetScrollMaxY())
-                    ImGui.SetScrollHereY(1f);
+                using var table = EndScope.Table("timestamp-table", 2, ImGuiTableFlags.PreciseWidths);
+                if (!table.Success)
+                    return true;
 
-                handler.Draw();
+                ImGui.TableSetupColumn("timestamps", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("messages", ImGuiTableColumnFlags.WidthStretch);
+
+                DrawMessages(tab, messages, handler, true, compact, oldCellPadding.Y);
+
+                // Released before the popups below: their actions can edit this list, and the lock is not reentrant.
+                var held = messages;
+                messages = null;
+                held.Dispose();
+
+                using (new StyleVarScope(ImGuiStyleVar.ItemSpacing, oldItemSpacing))
+                using (new StyleVarScope(ImGuiStyleVar.CellPadding, oldCellPadding))
+                {
+                    // Custom styles can have cellPadding that go above 4, which GetScrollY isn't respecting
+                    var cellPaddingOffset = !compact && oldCellPadding.Y > 4f ? oldCellPadding.Y - 4f : 0f;
+                    if (switchedTab || ImGui.GetScrollY() + cellPaddingOffset >= ImGui.GetScrollMaxY())
+                        ImGui.SetScrollHereY(1f);
+
+                    handler.Draw();
+                }
             }
         }
+        finally
+        {
+            messages?.Dispose();
+        }
+
+        return true;
     }
 
-    private void DrawMessages(Tab tab, PayloadHandler handler, bool isTable, bool moreCompact = false, float oldCellPaddingY = 0)
+    // Draw thread only. Every collapsed group draws its " (Nx)" suffix on every frame, visible or not, so one chunk
+    // per count is kept.
+    private readonly Dictionary<int, Chunk[]> CollapsedCounts = [];
+
+    private Chunk[] CollapsedCountChunks(int count)
+    {
+        if (CollapsedCounts.TryGetValue(count, out var chunks))
+            return chunks;
+
+        // A group that keeps growing leaves one entry per count it passed through; start over rather than keep them all.
+        if (CollapsedCounts.Count >= 256)
+            CollapsedCounts.Clear();
+
+        chunks = [new TextChunk(ChunkSource.None, null, $" ({count}x)") { FallbackColor = ChatType.System, Italic = true }];
+        CollapsedCounts[count] = chunks;
+        return chunks;
+    }
+
+    // Drawn for every row without content. Shared because nothing writes to it: it has no link and no Message, so
+    // hover, click and the context menu see the same chunk a fresh one would be.
+    private static readonly Chunk[] EmptyContent = [new TextChunk(ChunkSource.Content, null, " ")];
+
+    // Its size under the current font changes with anything that moves line breaks: font, size, scale.
+    private static ReadOnlySpan<byte> LayoutProbe => "Wg字 (0x)"u8;
+
+    // The caller holds the list's lock for the whole call and releases it.
+    private void DrawMessages(Tab tab, Tab.MessageList.RLockedMessageList messages, PayloadHandler handler, bool isTable, bool moreCompact = false, float oldCellPaddingY = 0)
     {
         try
         {
-            // This may produce ApplicationException which is catched below.
-            using var messages = tab.Messages.GetReadOnly(3);
-
             var reset = false;
             if (LastResize is { IsRunning: true, Elapsed.TotalSeconds: > 0.25 })
             {
@@ -669,6 +876,58 @@ public partial class ChatLog : Window, IChatWindow
             var lastTimestamp = string.Empty;
             int? lastMessageHash = null;
             var sameCount = 0;
+
+            // The row started last. Its height is measured when the next row starts; with collapsing that row is not
+            // always messages[i - 1], because a group's duplicates start no row and its " (Nx)" goes on the first one.
+            var prevRow = -1;
+            var prevRowSkipped = false;
+            var prevLayout = default(RowLayout);
+            var fontProbe = ImGui.CalcTextSize(LayoutProbe);
+            var scale = ImGuiHelpers.GlobalScale;
+            var hideNames = PlayerUtil.ScreenshotMode;
+            var showEmotes = Plugin.Config.ShowEmotes;
+
+            // Until the icon texture loads, icons take no space. Looked up once a group needs it, which also keeps
+            // the texture loaded while the groups' rows are skipped instead of drawn.
+            bool? iconsReady = null;
+            bool IconsReady() => iconsReady ??= Plugin.TextureProvider.GetFromGame(ChunkHandler.IconTexture).GetWrapOrDefault() != null;
+
+            // ImGui rounds positions toward zero, so a line laid out above the top of the screen ends up a pixel taller
+            // than on screen; a row's height therefore also depends on which side of that edge it lies. A row ending
+            // exactly on the edge may have rounded either way, so it counts as crossing it.
+            var toScreen = ImGui.GetCursorScreenPos().Y - ImGui.GetCursorPosY();
+            var rowPadding = isTable && !moreCompact ? oldCellPaddingY * 2 : 0;
+            static int SideOf(float top, float bottom) => top >= 0 ? 1 : bottom < 0 ? -1 : 0;
+
+            RowLayout LayoutFor(Message row, int size, float width, int side)
+            {
+                var stamp = !isTable && tab.DisplayTimestamp ? row.TimestampFor(row.Date.ToLocalTime(), Plugin.Config.Use24HourClock).Text : null;
+                return new RowLayout(size, width, stamp, fontProbe, scale, hideNames, showEmotes, IconsReady(), side);
+            }
+
+            void DrawTimestampCell(Message row)
+            {
+                var localTime = row.Date.ToLocalTime();
+                var timestamp = row.TimestampFor(localTime, Plugin.Config.Use24HourClock).Text;
+                if (!Plugin.Config.HideSameTimestamps || timestamp != lastTimestamp)
+                {
+                    lastTimestamp = timestamp;
+                    ImGui.TextUnformatted(timestamp);
+
+                    // We use an IsItemHovered() check here instead of
+                    // just calling Tooltip() to avoid computing the
+                    // tooltip string for all visible items on every
+                    // frame.
+                    if (ImGui.IsItemHovered())
+                        ImGuiUtil.Tooltip(localTime.ToString("F"));
+                }
+                else
+                {
+                    // Avoids rendering issues caused by emojis in
+                    // message content.
+                    ImGui.TextUnformatted("");
+                }
+            }
 
             var maxLines = Plugin.Config.MaxLinesToRender;
             var startLine = messages.Count > maxLines ? messages.Count - maxLines : 0;
@@ -695,13 +954,18 @@ public partial class ChatLog : Window, IChatWindow
 
                     if (sameCount > 0)
                     {
-                        ImGui.SameLine();
-                        InputHandler.ChunkHandler.DrawChunks(
-                            [new TextChunk(ChunkSource.None, null, $" ({sameCount + 1}x)") { FallbackColor = ChatType.System, Italic = true }],
-                            true,
-                            handler,
-                            ImGui.GetContentRegionAvail().X
-                        );
+                        // The suffix sits on the group's first row; one skipped as off screen gets none.
+                        if (!prevRowSkipped)
+                        {
+                            ImGui.SameLine();
+                            InputHandler.ChunkHandler.DrawChunks(
+                                CollapsedCountChunks(sameCount + 1),
+                                true,
+                                handler,
+                                ImGui.GetContentRegionAvail().X
+                            );
+                        }
+
                         sameCount = 0;
                     }
 
@@ -714,26 +978,35 @@ public partial class ChatLog : Window, IChatWindow
                 if (isTable)
                     ImGui.TableNextColumn();
 
-                // Set the height of the previous message. `lastPosY` is set to
-                // the top of the previous message, and the current cursor is at
-                // the top of the current message.
-                if (i > 0)
+                // Set the height of the previous row. `lastPosY` is set to
+                // the top of the previous row, and the current cursor is at
+                // the top of the current row.
+                if (prevRow >= 0)
                 {
-                    var prevMessage = messages[i - 1];
+                    var prevMessage = messages[prevRow];
                     prevMessage.Height.TryGetValue(tab.Identifier, out var prevHeight);
                     if (prevHeight == null || (prevMessage.IsVisible.TryGetValue(tab.Identifier, out var prevVisible) && prevVisible))
                     {
                         var newHeight = ImGui.GetCursorPosY() - lastPosY;
 
                         // Remove the padding from the bottom of the previous row and the top of the current row.
-                        if (isTable && !moreCompact)
-                            newHeight -= oldCellPaddingY * 2;
+                        newHeight -= rowPadding;
 
                         if (newHeight != 0)
+                        {
                             prevMessage.Height[tab.Identifier] = newHeight;
+                            prevMessage.SetRowLayout(tab.Identifier, prevLayout with { Side = SideOf(lastPosY + toScreen, ImGui.GetCursorPosY() + toScreen) });
+                        }
                     }
                 }
                 lastPosY = ImGui.GetCursorPosY();
+                prevRow = i;
+                prevRowSkipped = false;
+
+                var groupSize = 1;
+                if (Plugin.Config.CollapseDuplicateMessages)
+                    while (i + groupSize < messages.Count && messages[i + groupSize].Hash == message.Hash)
+                        groupSize++;
 
                 // message has rendered once
                 // message isn't visible, so render dummy
@@ -747,47 +1020,55 @@ public partial class ChatLog : Window, IChatWindow
                     if (isTable)
                         ImGui.TableNextColumn();
 
-                    ImGui.Dummy(new Vector2(10f, height.Value));
+                    var top = lastPosY + toScreen;
+                    var fits = (groupSize == 1 && !message.HasRowLayout(tab.Identifier))
+                               || message.HeightMeasuredUnder(tab.Identifier, LayoutFor(message, groupSize, ImGui.GetContentRegionAvail().X, SideOf(top, top + height.Value + rowPadding)));
+                    if (fits)
+                    {
+                        ImGui.Dummy(new Vector2(10f, height.Value));
 
-                    var nowVisible = ImGui.IsItemVisible();
-                    if (!nowVisible)
-                        continue;
+                        var nowVisible = ImGui.IsItemVisible();
+                        if (!nowVisible)
+                        {
+                            // A skipped group head still fills its timestamp cell, so the column's width and which repeated
+                            // timestamps get hidden stay as they are when its whole row is drawn.
+                            if (isTable && groupSize > 1)
+                            {
+                                ImGui.TableSetColumnIndex(0);
+                                ImGui.SetCursorPos(beforeDummy);
+                                DrawTimestampCell(message);
+                                ImGui.TableNextColumn();
+                            }
+
+                            prevRowSkipped = true;
+                            continue;
+                        }
+
+                        message.IsVisible[tab.Identifier] = nowVisible;
+                    }
+                    else
+                    {
+                        // Measured under another layout (group size, width, timestamp, font): draw it in full and measure it again.
+                        message.Height[tab.Identifier] = null;
+                    }
 
                     if (isTable)
                         ImGui.TableSetColumnIndex(0);
 
                     ImGui.SetCursorPos(beforeDummy);
-                    message.IsVisible[tab.Identifier] = nowVisible;
                 }
 
+                var rowWidth = isTable ? 0f : ImGui.GetContentRegionAvail().X;
                 if (tab.DisplayTimestamp)
                 {
-                    var localTime = message.Date.ToLocalTime();
-                    var timestamp = localTime.ToString("t", !Plugin.Config.Use24HourClock ? null : CultureInfo.CreateSpecificCulture("de-DE"));
                     if (isTable)
                     {
-                        if (!Plugin.Config.HideSameTimestamps || timestamp != lastTimestamp)
-                        {
-                            lastTimestamp = timestamp;
-                            ImGui.TextUnformatted(timestamp);
-
-                            // We use an IsItemHovered() check here instead of
-                            // just calling Tooltip() to avoid computing the
-                            // tooltip string for all visible items on every
-                            // frame.
-                            if (ImGui.IsItemHovered())
-                                ImGuiUtil.Tooltip(localTime.ToString("F"));
-                        }
-                        else
-                        {
-                            // Avoids rendering issues caused by emojis in
-                            // message content.
-                            ImGui.TextUnformatted("");
-                        }
+                        DrawTimestampCell(message);
                     }
                     else
                     {
-                        InputHandler.ChunkHandler.DrawChunk(new TextChunk(ChunkSource.None, null, $"[{timestamp}] ") { Foreground = 0xFFFFFFFF, Color = ColourUtil.RgbaToVector4(0xFFFFFFFF)});
+                        var stamp = message.TimestampFor(message.Date.ToLocalTime(), Plugin.Config.Use24HourClock);
+                        InputHandler.ChunkHandler.DrawChunk(stamp.Chunk);
                         ImGui.SameLine();
                     }
                 }
@@ -796,6 +1077,9 @@ public partial class ChatLog : Window, IChatWindow
                     ImGui.TableNextColumn();
 
                 var lineWidth = ImGui.GetContentRegionAvail().X;
+                prevLayout = groupSize > 1 || message.HasRowLayout(tab.Identifier)
+                    ? LayoutFor(message, groupSize, isTable ? lineWidth : rowWidth, 0)
+                    : default;
                 if (message.Sender.Count > 0)
                 {
                     InputHandler.ChunkHandler.DrawChunks(message.Sender, true, handler, lineWidth);
@@ -804,7 +1088,7 @@ public partial class ChatLog : Window, IChatWindow
 
                 // We need to draw something otherwise the item visibility check below won't work.
                 if (message.Content.Count == 0)
-                    InputHandler.ChunkHandler.DrawChunks([new TextChunk(ChunkSource.Content, null, " ")], true, handler, lineWidth);
+                    InputHandler.ChunkHandler.DrawChunks(EmptyContent, true, handler, lineWidth);
                 else
                     InputHandler.ChunkHandler.DrawChunks(message.Content, true, handler, lineWidth);
 
@@ -813,8 +1097,7 @@ public partial class ChatLog : Window, IChatWindow
         }
         catch (ApplicationException)
         {
-            // We couldn't get a reader lock on messages within 3ms, so
-            // don't draw anything (and don't log a warning either).
+            // Swallowed without a warning as before. A busy message list no longer arrives here: the caller skips the frame.
         }
         catch (Exception ex)
         {
@@ -824,7 +1107,7 @@ public partial class ChatLog : Window, IChatWindow
 
     private void DrawTabBar()
     {
-        using var tabBar = ImRaii.TabBar("##chat2-tabs");
+        using var tabBar = EndScope.TabBar("##chat2-tabs");
         if (!tabBar.Success)
             return;
 
@@ -835,12 +1118,16 @@ public partial class ChatLog : Window, IChatWindow
             if (tab.PopOut)
                 continue;
 
-            var unread = tabI == Plugin.LastTab || tab.UnreadMode == UnreadMode.None || tab.Unread == 0 ? "" : $" ({tab.Unread})";
+            var showUnread = tabI != Plugin.LastTab && tab.UnreadMode != UnreadMode.None && tab.Unread != 0;
             var flags = ImGuiTabItemFlags.None;
             if (Plugin.WantedTab == tabI)
                 flags |= ImGuiTabItemFlags.SetSelected;
 
-            using var tabItem = ImRaii.TabItem($"{tab.Name}{unread}###log-tab-{tabI}", flags);
+            // The count is formatted straight into the label buffer; a separate " (N)" string would be a new one
+            // every frame for as long as a background tab has unread lines.
+            using var tabItem = showUnread
+                ? EndScope.TabItem($"{tab.Name} ({tab.Unread})###log-tab-{tabI}", flags)
+                : EndScope.TabItem($"{tab.Name}###log-tab-{tabI}", flags);
             DrawTabContextMenu(tab, tabI);
 
             if (!tabItem.Success)
@@ -862,7 +1149,7 @@ public partial class ChatLog : Window, IChatWindow
     private void DrawTabSidebar()
     {
         var currentTab = -1;
-        using var tabTable = ImRaii.Table("tabs-table", 2, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.Resizable);
+        using var tabTable = EndScope.Table("tabs-table", 2, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.Resizable);
         if (!tabTable.Success)
             return;
 
@@ -873,9 +1160,9 @@ public partial class ChatLog : Window, IChatWindow
 
         var hasTabSwitched = false;
         var childHeight = GetRemainingHeightForMessageLog(true);
-        using (var child = ImRaii.Child("##chat2-tab-sidebar", new Vector2(-1, childHeight)))
+        using (var child = EndScope.Child("##chat2-tab-sidebar", new Vector2(-1, childHeight)))
         {
-            if (child)
+            if (child.Success)
             {
                 var previousTab = Plugin.CurrentTab;
                 for (var tabI = 0; tabI < Plugin.Config.Tabs.Count; tabI++)
@@ -884,8 +1171,11 @@ public partial class ChatLog : Window, IChatWindow
                     if (tab.PopOut)
                         continue;
 
-                    var unread = tabI == Plugin.LastTab || tab.UnreadMode == UnreadMode.None || tab.Unread == 0 ? "" : $" ({tab.Unread})";
-                    var clicked = ImGui.Selectable($"{tab.Name}{unread}###log-tab-{tabI}", Plugin.LastTab == tabI || Plugin.WantedTab == tabI);
+                    var showUnread = tabI != Plugin.LastTab && tab.UnreadMode != UnreadMode.None && tab.Unread != 0;
+                    var selected = Plugin.LastTab == tabI || Plugin.WantedTab == tabI;
+                    var clicked = showUnread
+                        ? ImGui.Selectable($"{tab.Name} ({tab.Unread})###log-tab-{tabI}", selected)
+                        : ImGui.Selectable($"{tab.Name}###log-tab-{tabI}", selected);
                     DrawTabContextMenu(tab, tabI);
 
                     if (!clicked && Plugin.WantedTab != tabI)
@@ -916,21 +1206,34 @@ public partial class ChatLog : Window, IChatWindow
 
     private void DrawTabContextMenu(Tab tab, int i)
     {
-        using var contextMenu = ImRaii.ContextPopupItem($"tab-context-menu-{i}");
+        using var contextMenu = EndScope.ContextPopupItem($"tab-context-menu-{i}");
         if (!contextMenu.Success)
             return;
 
         var anyChanged = false;
         var tabs = Plugin.Config.Tabs;
 
+        // Everything in this menu edits the live config directly. The settings window keeps its own
+        // snapshot of the tab list and copies it back wholesale on Save, so each edit is also mirrored
+        // into that snapshot - otherwise pressing Save there would silently undo the change. Mirroring
+        // per edit (rather than resyncing the whole snapshot) preserves whatever is unsaved in the
+        // settings window. See SettingsWindow.MirrorTabEdit.
+        var identifier = tab.Identifier;
+
         ImGui.SetNextItemWidth(250f * ImGuiHelpers.GlobalScale);
         if (ImGui.InputText("##tab-name", ref tab.Name, 128))
+        {
+            var name = tab.Name;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.Name = name);
             anyChanged = true;
+        }
 
         if (ImGuiUtil.IconButton(FontAwesomeIcon.TrashAlt, tooltip: Language.ChatLog_Tabs_Delete))
         {
             tabs.RemoveAt(i);
+            Plugin.SettingsWindow.MirrorTabRemoval(identifier);
             Plugin.WantedTab = 0;
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
 
             anyChanged = true;
         }
@@ -942,7 +1245,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowLeft, Language.ChatLog_Tabs_MoveLeft);
         if (ImGuiUtil.IconButton(leftIcon, tooltip: leftTooltip) && i > 0)
         {
+            var neighbour = tabs[i - 1].Identifier;
             (tabs[i - 1], tabs[i]) = (tabs[i], tabs[i - 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -954,7 +1259,9 @@ public partial class ChatLog : Window, IChatWindow
             : (FontAwesomeIcon.ArrowRight, Language.ChatLog_Tabs_MoveRight);
         if (ImGuiUtil.IconButton(rightIcon, tooltip: rightTooltip) && i < tabs.Count - 1)
         {
+            var neighbour = tabs[i + 1].Identifier;
             (tabs[i + 1], tabs[i]) = (tabs[i], tabs[i + 1]);
+            Plugin.SettingsWindow.MirrorTabSwap(identifier, neighbour);
             ImGui.CloseCurrentPopup();
             anyChanged = true;
         }
@@ -963,6 +1270,8 @@ public partial class ChatLog : Window, IChatWindow
         if (ImGuiUtil.IconButton(FontAwesomeIcon.WindowRestore, tooltip: Language.ChatLog_Tabs_PopOut))
         {
             tab.PopOut = true;
+            Plugin.SettingsWindow.MirrorTabEdit(identifier, mirror => mirror.PopOut = true);
+            Plugin.Config.RecalculateMaxUnhideEligibleTabActivity();
             anyChanged = true;
         }
 
@@ -984,13 +1293,13 @@ public partial class ChatLog : Window, IChatWindow
             if (!tab.PopOut)
                 continue;
 
-            if (PopOutWindows.Contains(tab.Identifier))
+            if (PopOutWindows.ContainsKey(tab.Identifier))
                 continue;
 
             var window = new Popout(Plugin, tab, i);
 
             Plugin.WindowSystem.AddWindow(window);
-            PopOutWindows.Add(tab.Identifier);
+            PopOutWindows.Add(tab.Identifier, window);
         }
     }
 }

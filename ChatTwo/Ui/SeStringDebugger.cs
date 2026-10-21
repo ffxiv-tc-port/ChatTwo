@@ -157,7 +157,7 @@ public class SeStringDebugger : Window
                         { "RawItemId", item.RawItemId.ToString() },
                         { "Kind", EnumName(item.Kind) },
                         { "IsHQ", item.IsHQ.ToString() },
-                        { "Item.Name", item.Kind == ItemKind.EventItem ? Sheets.EventItemSheet.GetRow(item.ItemId).Name.ExtractText() : Sheets.ItemSheet.GetRow(item.ItemId).Name.ExtractText() },
+                        { "Item.Name", item.Kind == ItemKind.EventItem ? Sheets.EventItemName(Sheets.EventItemSheet.GetRow(item.ItemId)).ExtractText() : Sheets.ItemSheet.GetRow(item.ItemId).Name.ExtractText() },
                     });
                     break;
                 }

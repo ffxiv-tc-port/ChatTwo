@@ -349,7 +349,7 @@ public partial class Message
 
                         var name = kind != ItemKind.EventItem
                             ? Sheets.ItemSheet.GetRow(item.ItemId).Name.ToString()
-                            : Sheets.EventItemSheet.GetRow(item.ItemId).Name.ToString();
+                            : Sheets.EventItemName(Sheets.EventItemSheet.GetRow(item.ItemId)).ToString();
 
                         var link = new ItemPayload(item.ItemId, kind, $"{SeIconChar.LinkMarker.ToIconChar()}{name}");
                         AddChunkWithMessage(text.NewWithStyle(chunk.Source, link, link.DisplayName ?? "Unknown"));

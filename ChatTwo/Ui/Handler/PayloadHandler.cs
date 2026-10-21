@@ -496,7 +496,7 @@ public sealed class PayloadHandler
             InlineIcon(icon);
 
         UseTextCache(payload, SiteEventItemHover);
-        InputHandler.ChunkHandler.DrawChunks(CachedName ??= SheetChunks(itemRow.Name.ToDalamudString()));
+        InputHandler.ChunkHandler.DrawChunks(CachedName ??= SheetChunks(Sheets.EventItemName(itemRow).ToDalamudString()));
         ImGui.Separator();
 
         if (!Sheets.EventItemHelpSheet.TryGetRow(payload.RawItemId, out var itemHelpRow))
@@ -651,7 +651,7 @@ public sealed class PayloadHandler
             InlineIcon(icon);
 
         UseTextCache(payload, SiteEventItemPopup);
-        InputHandler.ChunkHandler.DrawChunks(CachedName ??= SheetChunks(item.Name.ToDalamudString()), false);
+        InputHandler.ChunkHandler.DrawChunks(CachedName ??= SheetChunks(Sheets.EventItemName(item).ToDalamudString()), false);
         ImGui.Separator();
 
         var realItemId = payload.RawItemId;
@@ -659,7 +659,7 @@ public sealed class PayloadHandler
             GameFunctions.Context.LinkItem(realItemId);
 
         if (ImGui.Selectable(Language.Context_CopyItemName))
-            ImGui.SetClipboardText(item.Name.ToString());
+            ImGui.SetClipboardText(Sheets.EventItemName(item).ToString());
     }
 
     private void DrawPlayerPopup(Chunk chunk, PlayerPayload player)

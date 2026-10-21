@@ -2,6 +2,7 @@
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 
 namespace ChatTwo;
 
@@ -31,6 +32,10 @@ public static class Sheets
         TextCommandSheet = Plugin.DataManager.GetExcelSheet<TextCommand>();
         EventItemHelpSheet = Plugin.DataManager.GetExcelSheet<EventItemHelp>();
     }
+
+    // 台服 EventItem 的名稱放在 Singular（Name 幾乎全空）；Name 有值時照舊用 Name。
+    public static ReadOnlySeString EventItemName(in EventItem row) =>
+        row.Name.IsEmpty ? row.Singular : row.Name;
 
     public static bool IsInForay() =>
         TerritorySheet.TryGetRow(Plugin.ClientState.TerritoryType, out var row) &&

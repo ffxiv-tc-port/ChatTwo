@@ -17,8 +17,13 @@ namespace ChatTwo.Util;
 
 public static class AutoTranslate
 {
+    // The preload thread and the framework thread both reach AllEntries. Entries is only touched
+    // under BuildLock; ValidEntries is built privately and published whole, never mutated after.
+    // A framework caller arriving mid-preload waits for it, which is never longer than building itself.
+    private static readonly object BuildLock = new();
     private static readonly Dictionary<ClientLanguage, List<AutoTranslateEntry>> Entries = new();
-    private static readonly HashSet<(uint, uint)> ValidEntries = [];
+    private static volatile HashSet<(uint, uint)> ValidEntries = [];
+    private static int PreloadFailureLogged;
 
     private static Parser<char, (string name, Maybe<IEnumerable<ISelectorPart>> selector)> Parser()
     {
@@ -61,18 +66,34 @@ public static class AutoTranslate
     {
         new Thread(() =>
         {
-            var sw = Stopwatch.StartNew();
-            AllEntries();
-            Plugin.Log.Debug($"Warming up auto-translate took {sw.ElapsedMilliseconds}ms");
+            // An exception escaping a thread entry terminates the whole game process.
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                AllEntries();
+                Plugin.Log.Debug($"Warming up auto-translate took {sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                if (Interlocked.Exchange(ref PreloadFailureLogged, 1) == 0)
+                    Plugin.Log.Warning(ex, "Auto-translate preload failed; the cache will be built on first use instead");
+            }
         }).Start();
     }
 
     private static List<AutoTranslateEntry> AllEntries()
     {
+        lock (BuildLock)
+            return AllEntriesLocked();
+    }
+
+    private static List<AutoTranslateEntry> AllEntriesLocked()
+    {
         if (Entries.TryGetValue(Plugin.DataManager.Language, out var entries))
             return entries;
 
         var shouldAdd = ValidEntries.Count == 0;
+        var valid = new HashSet<(uint, uint)>();
 
         var parser = Parser();
         var list = new List<AutoTranslateEntry>();
@@ -149,7 +170,7 @@ public static class AutoTranslate
                                     list.Add(new AutoTranslateEntry(row.Group, (uint)i, rawName.ToString(), string.Empty));
 
                                     if (shouldAdd)
-                                        ValidEntries.Add((row.Group, (uint)i));
+                                        valid.Add((row.Group, (uint)i));
                                 }
                             }
                         }
@@ -163,7 +184,7 @@ public static class AutoTranslate
                     list.Add(new AutoTranslateEntry(row.Group, row.RowId, row.Text.ToString(), row.GroupTitle.ToString()));
 
                     if (shouldAdd)
-                        ValidEntries.Add((row.Group, row.RowId));
+                        valid.Add((row.Group, row.RowId));
                 }
             }
             catch (Exception ex)
@@ -173,6 +194,8 @@ public static class AutoTranslate
         }
 
         Entries[Plugin.DataManager.Language] = list;
+        if (shouldAdd)
+            ValidEntries = valid;
         return list;
     }
 

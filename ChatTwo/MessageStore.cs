@@ -414,9 +414,11 @@ public class MessageStore : IDisposable
     public long DatabaseSize() => !File.Exists(DbPath) ? 0 : new FileInfo(DbPath).Length;
     public long DatabaseLogSize() => !File.Exists(LogPath) ? 0 : new FileInfo(LogPath).Length;
 
-    public int MessageCount()
+    public int MessageCount() => MessageCount(Connection);
+
+    public static int MessageCount(SqliteConnection conn)
     {
-        using var cmd = Connection.CreateCommand();
+        using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM messages;";
         return Convert.ToInt32(cmd.ExecuteScalar());
     }

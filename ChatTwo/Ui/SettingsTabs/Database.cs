@@ -29,7 +29,12 @@ public sealed class Database : ISettingsTab
     private long DatabaseLastRefreshTicks;
     private long DatabaseSize;
     private long DatabaseLogSize;
-    private int DatabaseMessageCount;
+
+    // COUNT(*) takes tens of ms on a large database, so it runs on the thread pool on a connection of its own.
+    // -1 until the first count lands; one count at a time, and a refresh waits until the running one is done.
+    private long DatabaseMessageCount = -1;
+    private int CountRunning;
+    private bool CountFailureLogged;
 
     public void Draw(bool changed)
     {
@@ -107,11 +112,11 @@ public sealed class Database : ISettingsTab
         {
             // Refresh the database size and message count every 5 seconds to avoid
             // constant stat calls and spamming the database.
-            if (DatabaseLastRefreshTicks + 5 * 1000 < Environment.TickCount64)
+            if (DatabaseLastRefreshTicks + 5 * 1000 < Environment.TickCount64 && Volatile.Read(ref CountRunning) == 0)
             {
                 DatabaseSize = Plugin.MessageManager.Store.DatabaseSize();
                 DatabaseLogSize = Plugin.MessageManager.Store.DatabaseLogSize();
-                DatabaseMessageCount = Plugin.MessageManager.Store.MessageCount();
+                StartMessageCount();
                 DatabaseLastRefreshTicks = Environment.TickCount64;
             }
 
@@ -139,7 +144,8 @@ public sealed class Database : ISettingsTab
             if (ImGui.IsItemHovered())
                 ImGuiUtil.Tooltip(StringUtil.BytesToString(DatabaseLogSize));
 
-            ImGuiUtil.HelpText(string.Format(Language.Options_Database_Metadata_MessageCount, DatabaseMessageCount));
+            var messageCount = Interlocked.Read(ref DatabaseMessageCount);
+            ImGuiUtil.HelpText(string.Format(Language.Options_Database_Metadata_MessageCount, messageCount < 0 ? "?" : (object) messageCount));
 
             if (ImGuiUtil.CtrlShiftButton(Language.Options_ClearDatabase_Button, Language.Options_ClearDatabase_Tooltip))
             {
@@ -174,6 +180,35 @@ public sealed class Database : ISettingsTab
         if (ImGuiUtil.CtrlShiftButton("Inject 10,000 messages", "Ctrl+Shift: creates 10,000 unique messages (async)"))
             new Thread(() => InsertMessages(10_000)).Start();
         ImGui.Spacing();
+    }
+
+    private void StartMessageCount()
+    {
+        if (Interlocked.Exchange(ref CountRunning, 1) == 1)
+            return;
+
+        var store = Plugin.MessageManager.Store;
+        Task.Run(() =>
+        {
+            try
+            {
+                using var conn = store.OpenReadOnlyConnection();
+                Interlocked.Exchange(ref DatabaseMessageCount, MessageStore.MessageCount(conn));
+            }
+            catch (Exception ex)
+            {
+                // The last count stays on screen; logged once so a locked database does not repeat every 5 seconds.
+                if (!CountFailureLogged)
+                {
+                    CountFailureLogged = true;
+                    Plugin.Log.Warning(ex, "Unable to count the stored messages");
+                }
+            }
+            finally
+            {
+                Volatile.Write(ref CountRunning, 0);
+            }
+        });
     }
 
     private void InsertMessages(int count)

@@ -34,7 +34,7 @@ public class MessageManager : IAsyncDisposable
     // be consumed in a separate thread and perform more processing (emotes,
     // URLs) as well as inserting the message into the database.
     private Queue<PendingMessage> PendingSync { get; } = [];
-    private ConcurrentQueue<PendingMessage> PendingAsync { get; } = [];
+    private HandoffQueue<PendingMessage> PendingAsync { get; } = new();
     private readonly Thread PendingMessageThread;
     private readonly CancellationTokenSource PendingThreadCancellationToken = new();
 
@@ -210,8 +210,7 @@ public class MessageManager : IAsyncDisposable
             LastContentId = contentId;
 
         // Drain the PendingSync queue into the PendingAsync queue.
-        while (PendingSync.TryDequeue(out var pending))
-            PendingAsync.Enqueue(pending);
+        PendingAsync.MoveFrom(PendingSync);
 
         AwaitingSource.Disarm();
     }
@@ -220,20 +219,17 @@ public class MessageManager : IAsyncDisposable
     {
         while (!token.IsCancellationRequested)
         {
-            if (PendingAsync.TryDequeue(out var pendingMessage))
+            // Blocks while the queue is empty; false only once cancelled, which ends the loop.
+            if (!PendingAsync.TryTake(out var pendingMessage, token))
+                continue;
+
+            try
             {
-                try
-                {
-                    ProcessMessage(pendingMessage);
-                }
-                catch (Exception ex)
-                {
-                    Plugin.Log.Error(ex, "Error processing pending message");
-                }
+                ProcessMessage(pendingMessage);
             }
-            else
+            catch (Exception ex)
             {
-                Thread.Sleep(1);
+                Plugin.Log.Error(ex, "Error processing pending message");
             }
         }
     }

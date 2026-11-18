@@ -1569,4 +1569,112 @@
       <data name="Options_MessageFilters_Database_Warning">
           <value>這個動作沒有辦法還原。訊息一到就被丟棄，等於從來沒有存在任何地方，之後把規則刪掉也救不回來——只有已經在資料庫裡的訊息會重新出現。還不確定規則對不對，先在某個標籤頁自己的清單裡試。</value>
       </data>
+      <data name="DbViewer_Title" xml:space="preserve">
+          <value>聊天歷史</value>
+      </data>
+      <data name="DbViewer_Command_Help" xml:space="preserve">
+          <value>瀏覽、搜尋聊天歷史。</value>
+      </data>
+      <data name="DbViewer_Open" xml:space="preserve">
+          <value>瀏覽聊天歷史</value>
+      </data>
+      <data name="DbViewer_Open_Tooltip" xml:space="preserve">
+          <value>開啟聊天歷史視窗：可依日期、頻道、傳送者或內容搜尋所有存下的訊息，並查看某則訊息前後的對話。也可以輸入 /chat2Viewer 開啟。</value>
+      </data>
+      <data name="DbViewer_OpenTab_Tooltip" xml:space="preserve">
+          <value>瀏覽這個標籤頁的聊天歷史（套用這個標籤頁的頻道）</value>
+      </data>
+      <data name="DbViewer_Quick_Today" xml:space="preserve">
+          <value>今天</value>
+      </data>
+      <data name="DbViewer_Quick_7Days" xml:space="preserve">
+          <value>近 7 天</value>
+      </data>
+      <data name="DbViewer_Quick_30Days" xml:space="preserve">
+          <value>近 30 天</value>
+      </data>
+      <data name="DbViewer_Quick_All" xml:space="preserve">
+          <value>全部</value>
+      </data>
+      <data name="DbViewer_Channels_Button" xml:space="preserve">
+          <value>頻道</value>
+      </data>
+      <data name="DbViewer_Channels_SelectAll" xml:space="preserve">
+          <value>全選</value>
+      </data>
+      <data name="DbViewer_Channels_UnselectAll" xml:space="preserve">
+          <value>全不選</value>
+      </data>
+      <data name="DbViewer_Export_Label" xml:space="preserve">
+          <value>匯出：</value>
+      </data>
+      <data name="DbViewer_Search_Hint" xml:space="preserve">
+          <value>搜尋傳送者或內容（整個日期範圍）</value>
+      </data>
+      <data name="DbViewer_Search_Tooltip" xml:space="preserve">
+          <value>搜尋所選日期與頻道內的全部訊息，不只目前這一頁。不分大小寫，新舊兩種中間點（·／・）視為相同。範圍很長時可能要幾秒。</value>
+      </data>
+      <data name="DbViewer_Refresh_Tooltip" xml:space="preserve">
+          <value>重新查詢（包含之後新收到的訊息）</value>
+      </data>
+      <data name="DbViewer_Sort_NewestFirst" xml:space="preserve">
+          <value>最新的在前（點一下改為最舊的在前）</value>
+      </data>
+      <data name="DbViewer_Sort_OldestFirst" xml:space="preserve">
+          <value>最舊的在前（點一下改為最新的在前）</value>
+      </data>
+      <data name="DbViewer_Status_Page" xml:space="preserve">
+          <value>第 {0} / {1} 頁，共 {2} 則</value>
+      </data>
+      <data name="DbViewer_Status_PageUnknown" xml:space="preserve">
+          <value>第 ? / ? 頁，共 ? 則</value>
+      </data>
+      <data name="DbViewer_Status_Truncated" xml:space="preserve">
+          <value>符合的訊息超過 {0} 則，只列出最新的 {0} 則。請縮小日期、頻道或搜尋文字。</value>
+      </data>
+      <data name="DbViewer_Status_Searching" xml:space="preserve">
+          <value>查詢中… {0} 秒</value>
+      </data>
+      <data name="DbViewer_Status_Error" xml:space="preserve">
+          <value>查詢失敗（詳細內容請看 Dalamud 記錄檔）</value>
+      </data>
+      <data name="DbViewer_Tab_Results" xml:space="preserve">
+          <value>搜尋結果</value>
+      </data>
+      <data name="DbViewer_Tab_Context" xml:space="preserve">
+          <value>前後文</value>
+      </data>
+      <data name="DbViewer_Row_Tooltip" xml:space="preserve">
+          <value>點一下：顯示這則訊息前後的對話。右鍵：複製。</value>
+      </data>
+      <data name="DbViewer_Context_Show" xml:space="preserve">
+          <value>顯示前後文</value>
+      </data>
+      <data name="DbViewer_Copy_Line" xml:space="preserve">
+          <value>複製（含時間與頻道）</value>
+      </data>
+      <data name="DbViewer_Context_Empty" xml:space="preserve">
+          <value>在「搜尋結果」點一則訊息，就能看到它前後的對話。</value>
+      </data>
+      <data name="DbViewer_Context_Older" xml:space="preserve">
+          <value>載入更早的 {0} 則</value>
+      </data>
+      <data name="DbViewer_Context_Newer" xml:space="preserve">
+          <value>載入更晚的 {0} 則</value>
+      </data>
+      <data name="DbViewer_Context_NoOlder" xml:space="preserve">
+          <value>沒有更早的訊息</value>
+      </data>
+      <data name="DbViewer_Context_NoNewer" xml:space="preserve">
+          <value>沒有更晚的訊息</value>
+      </data>
+      <data name="DbViewer_Context_AllChannels" xml:space="preserve">
+          <value>所有頻道</value>
+      </data>
+      <data name="DbViewer_Context_AllChannels_Tooltip" xml:space="preserve">
+          <value>關閉：只顯示上方選擇的頻道。開啟：同一角色的所有頻道。</value>
+      </data>
+      <data name="DbViewer_Context_Anchor" xml:space="preserve">
+          <value>回到該則訊息</value>
+      </data>
 </root>

@@ -176,6 +176,48 @@ public class MessageStore : IDisposable
         return conn;
     }
 
+    /// <summary>A read-only connection of the caller's own, for queries that must not share the store's connection.</summary>
+    public SqliteConnection OpenReadOnlyConnection()
+    {
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = DbPath,
+            DefaultTimeout = 5,
+            Pooling = false,
+            Mode = SqliteOpenMode.ReadOnly,
+        };
+
+        var conn = new SqliteConnection(builder.ToString());
+        conn.Open();
+        return conn;
+    }
+
+    /// <summary>The given rows, oldest first, read on <paramref name="conn"/> rather than the store's connection.</summary>
+    public static MessageEnumerator GetByRowIds(SqliteConnection conn, ReadOnlySpan<long> rowIds)
+    {
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT
+                Id,
+                Receiver,
+                ContentId,
+                Date,
+                ChatType,
+                SourceKind,
+                TargetKind,
+                Sender,
+                Content,
+                SenderSource,
+                ContentSource,
+                ExtraChatChannel
+            FROM messages
+            WHERE rowid IN (" + History.HistoryIndex.JoinIds(rowIds) + @")
+            ORDER BY Date, rowid;
+        ";
+
+        return Enumerate(cmd);
+    }
+
     private void Migrate()
     {
         // Get current user_version.

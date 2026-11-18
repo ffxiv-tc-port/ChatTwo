@@ -1568,4 +1568,112 @@ Your old database can still be recovered, please contact the plugin author for h
       <data name="Options_MessageFilters_Database_Warning">
           <value>There is no undo. A message discarded on arrival was never written anywhere, so deleting the rule afterwards cannot bring it back - only messages that were already in the database will reappear. If you are not sure a rule is right, try it in a tab's own list first.</value>
       </data>
+      <data name="DbViewer_Title" xml:space="preserve">
+          <value>Chat History</value>
+      </data>
+      <data name="DbViewer_Command_Help" xml:space="preserve">
+          <value>Browse and search your chat history.</value>
+      </data>
+      <data name="DbViewer_Open" xml:space="preserve">
+          <value>Browse chat history</value>
+      </data>
+      <data name="DbViewer_Open_Tooltip" xml:space="preserve">
+          <value>Opens the chat history window: search every stored message by date, channel, sender or text, and see what was said around a message. Also available as /chat2Viewer.</value>
+      </data>
+      <data name="DbViewer_OpenTab_Tooltip" xml:space="preserve">
+          <value>Browse this tab's chat history (uses this tab's channels)</value>
+      </data>
+      <data name="DbViewer_Quick_Today" xml:space="preserve">
+          <value>Today</value>
+      </data>
+      <data name="DbViewer_Quick_7Days" xml:space="preserve">
+          <value>7 days</value>
+      </data>
+      <data name="DbViewer_Quick_30Days" xml:space="preserve">
+          <value>30 days</value>
+      </data>
+      <data name="DbViewer_Quick_All" xml:space="preserve">
+          <value>All</value>
+      </data>
+      <data name="DbViewer_Channels_Button" xml:space="preserve">
+          <value>Channels</value>
+      </data>
+      <data name="DbViewer_Channels_SelectAll" xml:space="preserve">
+          <value>Select all</value>
+      </data>
+      <data name="DbViewer_Channels_UnselectAll" xml:space="preserve">
+          <value>Unselect all</value>
+      </data>
+      <data name="DbViewer_Export_Label" xml:space="preserve">
+          <value>Export:</value>
+      </data>
+      <data name="DbViewer_Search_Hint" xml:space="preserve">
+          <value>Search sender or text in the whole date range</value>
+      </data>
+      <data name="DbViewer_Search_Tooltip" xml:space="preserve">
+          <value>Searches every message in the chosen dates and channels, not just the page shown. Letter case and the two middle dot spellings are ignored. Searching a long range can take a few seconds.</value>
+      </data>
+      <data name="DbViewer_Refresh_Tooltip" xml:space="preserve">
+          <value>Run the query again (includes messages that arrived since)</value>
+      </data>
+      <data name="DbViewer_Sort_NewestFirst" xml:space="preserve">
+          <value>Newest first (click for oldest first)</value>
+      </data>
+      <data name="DbViewer_Sort_OldestFirst" xml:space="preserve">
+          <value>Oldest first (click for newest first)</value>
+      </data>
+      <data name="DbViewer_Status_Page" xml:space="preserve">
+          <value>Page {0} / {1} - {2} messages</value>
+      </data>
+      <data name="DbViewer_Status_PageUnknown" xml:space="preserve">
+          <value>Page ? / ? - ? messages</value>
+      </data>
+      <data name="DbViewer_Status_Truncated" xml:space="preserve">
+          <value>More than {0} matches: only the newest {0} are listed. Narrow the dates, channels or search text.</value>
+      </data>
+      <data name="DbViewer_Status_Searching" xml:space="preserve">
+          <value>Searching... {0}s</value>
+      </data>
+      <data name="DbViewer_Status_Error" xml:space="preserve">
+          <value>Query failed (see the Dalamud log for details)</value>
+      </data>
+      <data name="DbViewer_Tab_Results" xml:space="preserve">
+          <value>Results</value>
+      </data>
+      <data name="DbViewer_Tab_Context" xml:space="preserve">
+          <value>Context</value>
+      </data>
+      <data name="DbViewer_Row_Tooltip" xml:space="preserve">
+          <value>Click: show the messages around this one. Right-click: copy.</value>
+      </data>
+      <data name="DbViewer_Context_Show" xml:space="preserve">
+          <value>Show surrounding messages</value>
+      </data>
+      <data name="DbViewer_Copy_Line" xml:space="preserve">
+          <value>Copy with time and channel</value>
+      </data>
+      <data name="DbViewer_Context_Empty" xml:space="preserve">
+          <value>Click a message under Results to see what was said around it.</value>
+      </data>
+      <data name="DbViewer_Context_Older" xml:space="preserve">
+          <value>Load {0} older</value>
+      </data>
+      <data name="DbViewer_Context_Newer" xml:space="preserve">
+          <value>Load {0} newer</value>
+      </data>
+      <data name="DbViewer_Context_NoOlder" xml:space="preserve">
+          <value>No older messages</value>
+      </data>
+      <data name="DbViewer_Context_NoNewer" xml:space="preserve">
+          <value>No newer messages</value>
+      </data>
+      <data name="DbViewer_Context_AllChannels" xml:space="preserve">
+          <value>All channels</value>
+      </data>
+      <data name="DbViewer_Context_AllChannels_Tooltip" xml:space="preserve">
+          <value>Off: only the channels chosen above. On: every channel of the same character.</value>
+      </data>
+      <data name="DbViewer_Context_Anchor" xml:space="preserve">
+          <value>Back to the message</value>
+      </data>
 </root>

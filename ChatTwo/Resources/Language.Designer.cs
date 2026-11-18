@@ -4397,5 +4397,329 @@ namespace ChatTwo.Resources {
                 return ResourceManager.GetString("Options_MessageFilters_Database_Warning", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Chat History.
+        /// </summary>
+        internal static string DbViewer_Title {
+            get {
+                return ResourceManager.GetString("DbViewer_Title", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Browse and search your chat history..
+        /// </summary>
+        internal static string DbViewer_Command_Help {
+            get {
+                return ResourceManager.GetString("DbViewer_Command_Help", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Browse chat history.
+        /// </summary>
+        internal static string DbViewer_Open {
+            get {
+                return ResourceManager.GetString("DbViewer_Open", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Opens the chat history window: search every stored message by date, channel, sender or text, and see what was said around a message. Also available as /chat2Viewer..
+        /// </summary>
+        internal static string DbViewer_Open_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_Open_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Browse this tab's chat history (uses this tab's channels).
+        /// </summary>
+        internal static string DbViewer_OpenTab_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_OpenTab_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Today.
+        /// </summary>
+        internal static string DbViewer_Quick_Today {
+            get {
+                return ResourceManager.GetString("DbViewer_Quick_Today", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 7 days.
+        /// </summary>
+        internal static string DbViewer_Quick_7Days {
+            get {
+                return ResourceManager.GetString("DbViewer_Quick_7Days", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 30 days.
+        /// </summary>
+        internal static string DbViewer_Quick_30Days {
+            get {
+                return ResourceManager.GetString("DbViewer_Quick_30Days", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All.
+        /// </summary>
+        internal static string DbViewer_Quick_All {
+            get {
+                return ResourceManager.GetString("DbViewer_Quick_All", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Channels.
+        /// </summary>
+        internal static string DbViewer_Channels_Button {
+            get {
+                return ResourceManager.GetString("DbViewer_Channels_Button", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select all.
+        /// </summary>
+        internal static string DbViewer_Channels_SelectAll {
+            get {
+                return ResourceManager.GetString("DbViewer_Channels_SelectAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unselect all.
+        /// </summary>
+        internal static string DbViewer_Channels_UnselectAll {
+            get {
+                return ResourceManager.GetString("DbViewer_Channels_UnselectAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export:.
+        /// </summary>
+        internal static string DbViewer_Export_Label {
+            get {
+                return ResourceManager.GetString("DbViewer_Export_Label", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Search sender or text in the whole date range.
+        /// </summary>
+        internal static string DbViewer_Search_Hint {
+            get {
+                return ResourceManager.GetString("DbViewer_Search_Hint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Searches every message in the chosen dates and channels, not just the page shown. Letter case and the two middle dot spellings are ignored. Searching a long range can take a few seconds..
+        /// </summary>
+        internal static string DbViewer_Search_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_Search_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run the query again (includes messages that arrived since).
+        /// </summary>
+        internal static string DbViewer_Refresh_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_Refresh_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Newest first (click for oldest first).
+        /// </summary>
+        internal static string DbViewer_Sort_NewestFirst {
+            get {
+                return ResourceManager.GetString("DbViewer_Sort_NewestFirst", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Oldest first (click for newest first).
+        /// </summary>
+        internal static string DbViewer_Sort_OldestFirst {
+            get {
+                return ResourceManager.GetString("DbViewer_Sort_OldestFirst", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Page {0} / {1} - {2} messages.
+        /// </summary>
+        internal static string DbViewer_Status_Page {
+            get {
+                return ResourceManager.GetString("DbViewer_Status_Page", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Page ? / ? - ? messages.
+        /// </summary>
+        internal static string DbViewer_Status_PageUnknown {
+            get {
+                return ResourceManager.GetString("DbViewer_Status_PageUnknown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to More than {0} matches: only the newest {0} are listed. Narrow the dates, channels or search text..
+        /// </summary>
+        internal static string DbViewer_Status_Truncated {
+            get {
+                return ResourceManager.GetString("DbViewer_Status_Truncated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Searching... {0}s.
+        /// </summary>
+        internal static string DbViewer_Status_Searching {
+            get {
+                return ResourceManager.GetString("DbViewer_Status_Searching", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Query failed (see the Dalamud log for details).
+        /// </summary>
+        internal static string DbViewer_Status_Error {
+            get {
+                return ResourceManager.GetString("DbViewer_Status_Error", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Results.
+        /// </summary>
+        internal static string DbViewer_Tab_Results {
+            get {
+                return ResourceManager.GetString("DbViewer_Tab_Results", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Context.
+        /// </summary>
+        internal static string DbViewer_Tab_Context {
+            get {
+                return ResourceManager.GetString("DbViewer_Tab_Context", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Click: show the messages around this one. Right-click: copy..
+        /// </summary>
+        internal static string DbViewer_Row_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_Row_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show surrounding messages.
+        /// </summary>
+        internal static string DbViewer_Context_Show {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_Show", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy with time and channel.
+        /// </summary>
+        internal static string DbViewer_Copy_Line {
+            get {
+                return ResourceManager.GetString("DbViewer_Copy_Line", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Click a message under Results to see what was said around it..
+        /// </summary>
+        internal static string DbViewer_Context_Empty {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_Empty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Load {0} older.
+        /// </summary>
+        internal static string DbViewer_Context_Older {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_Older", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Load {0} newer.
+        /// </summary>
+        internal static string DbViewer_Context_Newer {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_Newer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No older messages.
+        /// </summary>
+        internal static string DbViewer_Context_NoOlder {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_NoOlder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No newer messages.
+        /// </summary>
+        internal static string DbViewer_Context_NoNewer {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_NoNewer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All channels.
+        /// </summary>
+        internal static string DbViewer_Context_AllChannels {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_AllChannels", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Off: only the channels chosen above. On: every channel of the same character..
+        /// </summary>
+        internal static string DbViewer_Context_AllChannels_Tooltip {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_AllChannels_Tooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Back to the message.
+        /// </summary>
+        internal static string DbViewer_Context_Anchor {
+            get {
+                return ResourceManager.GetString("DbViewer_Context_Anchor", resourceCulture);
+            }
+        }
     }
 }

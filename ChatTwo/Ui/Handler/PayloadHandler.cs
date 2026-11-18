@@ -351,10 +351,10 @@ public sealed class PayloadHandler
             return string.Empty;
 
         var chunks = withSender ? message.Sender.Concat(message.Content) : message.Content;
-        return chunks.Where(chunk => chunk is TextChunk)
+        // Concat rather than Aggregate: a message with no text chunks (icons only) has nothing to fold.
+        return string.Concat(chunks.Where(chunk => chunk is TextChunk)
             .Cast<TextChunk>()
-            .Select(text => text.Content)
-            .Aggregate(string.Concat);
+            .Select(text => text.Content));
     }
 
     public unsafe void Click(Chunk chunk, Payload? payload, ImGuiMouseButton button)

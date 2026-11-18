@@ -249,12 +249,19 @@ public static class ChunkUtil
     // }
 
     public static IEnumerable<Chunk> ToChunks(SeString msg, ChunkSource source, ChatType? defaultColour)
+        => ToChunkList(msg, source, defaultColour);
+
+    /// <summary><see cref="ToChunks"/> as the new list it builds, for callers that would otherwise copy it with ToList.</summary>
+    public static List<Chunk> ToChunkList(SeString msg, ChunkSource source, ChatType? defaultColour)
     {
         var chunks = new List<Chunk>();
 
         var italic = false;
-        var foreground = new Stack<uint>();
-        var glow = new Stack<uint>();
+        var stacks = Interlocked.Exchange(ref SpareStacks, null) ?? new ColourStacks();
+        var foreground = stacks.Foreground;
+        var glow = stacks.Glow;
+        foreground.Clear();
+        glow.Clear();
         Payload? link = null;
 
         void Append(string text)
@@ -385,8 +392,19 @@ public static class ChunkUtil
             }
         }
 
+        SpareStacks = stacks;
         return chunks;
     }
+
+    // Scratch colour stacks shared by all threads: whoever takes the spare owns it until putting it back. Cleared
+    // when taken; a call that throws simply never puts it back.
+    private sealed class ColourStacks
+    {
+        public readonly Stack<uint> Foreground = new();
+        public readonly Stack<uint> Glow = new();
+    }
+
+    private static ColourStacks? SpareStacks;
 
     public static string ToRawString(List<Chunk> chunks)
     {

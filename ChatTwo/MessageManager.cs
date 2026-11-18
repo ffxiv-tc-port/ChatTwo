@@ -566,7 +566,7 @@ public class MessageManager : IAsyncDisposable
             senderChunks.Add(new TextChunk(ChunkSource.None, null, formatting.After) { FallbackColor = chatCode.Type });
         }
 
-        var contentChunks = ChunkUtil.ToChunks(pendingMessage.Content, ChunkSource.Content, chatCode.Type).ToList();
+        var contentChunks = ChunkUtil.ToChunkList(pendingMessage.Content, ChunkSource.Content, chatCode.Type);
         var message = new Message(CurrentContentId, pendingMessage.ContentId, pendingMessage.AccountId, chatCode, senderChunks, contentChunks, pendingMessage.Sender, pendingMessage.Content);
 
         // Keep the newest line that actually has a speaker around for the filter editor to show.

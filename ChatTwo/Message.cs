@@ -75,7 +75,13 @@ public partial class Message
         ExtraChatChannel = extraChatChannel;
         Hash = GenerateHash();
 
-        foreach (var chunk in sender.Concat(content))
+        SetMessageOn(sender);
+        SetMessageOn(content);
+    }
+
+    private void SetMessageOn(List<Chunk> chunks)
+    {
+        foreach (var chunk in chunks)
             chunk.Message = this;
     }
 
@@ -96,8 +102,8 @@ public partial class Message
         ExtraChatChannel = extraChatChannel;
         Hash = GenerateHash();
 
-        foreach (var chunk in sender.Concat(content))
-            chunk.Message = this;
+        SetMessageOn(sender);
+        SetMessageOn(content);
     }
 
     public static Message FakeMessage(List<Chunk> content, ChatCode code)
@@ -129,8 +135,8 @@ public partial class Message
     {
         var hash = SortCodeV2.GetHashCode()
                    ^ ExtraChatChannel.GetHashCode()
-                   ^ string.Join("", Sender.Select(c => c.StringValue())).GetHashCode()
-                   ^ string.Join("", Content.Select(c => c.StringValue())).GetHashCode();
+                   ^ JoinedHash(Sender)
+                   ^ JoinedHash(Content);
 
         if (Plugin.Config.CollapseKeepUniqueLinks)
         {
@@ -140,6 +146,24 @@ public partial class Message
         }
 
         return hash;
+    }
+
+    // Equals string.Join("", chunks.Select(c => c.StringValue())).GetHashCode(): string.GetHashCode(span) hashes
+    // the characters with the same per-process seed as the string's own GetHashCode.
+    private static int JoinedHash(List<Chunk> chunks)
+    {
+        var joined = new PooledChars(stackalloc char[256]);
+        try
+        {
+            foreach (var chunk in chunks)
+                joined.Append(chunk.StringValue());
+
+            return string.GetHashCode(joined.Written);
+        }
+        finally
+        {
+            joined.Dispose();
+        }
     }
 
     private static Guid ExtractExtraChatChannel(SeString contentSource)
@@ -166,7 +190,7 @@ public partial class Message
 
     private List<Chunk> CheckMessageContent(List<Chunk> oldChunks, Guid extraChatChannel)
     {
-        var newChunks = new List<Chunk>();
+        var newChunks = new List<Chunk>(oldChunks.Count);
         void AddChunkWithMessage(TextChunk chunk)
         {
             if (string.IsNullOrEmpty(chunk.Content))
@@ -184,6 +208,7 @@ public partial class Message
                 longest = length;
 
         Span<Tokenizer.TokenSpan> tokens = longest < 256 ? stackalloc Tokenizer.TokenSpan[longest + 1] : new Tokenizer.TokenSpan[longest + 1];
+        TextScratch? scratch = null;
         StringBuilder? wordBuilder = null;
         StringBuilder? sentenceBuilder = null;
         foreach (var chunk in oldChunks)
@@ -202,8 +227,9 @@ public partial class Message
             // The word is kept in its builder rather than turned into a string at every token: a string is only
             // needed when it turns out to be an emote, and most lines (every line without emotes) never have one.
             var content = text.Content;
-            wordBuilder ??= new StringBuilder();
-            sentenceBuilder ??= new StringBuilder(longest);
+            scratch ??= Interlocked.Exchange(ref SpareScratch, null) ?? new TextScratch();
+            wordBuilder ??= scratch.Word;
+            sentenceBuilder ??= scratch.Sentence;
             wordBuilder.Clear();
             sentenceBuilder.Clear();
             var count = Tokenizer.PrecedenceBasedRegexTokenizer.Tokenize(content, tokens);
@@ -267,12 +293,36 @@ public partial class Message
                 }
 
                 // End of string reached, we add our leftover. Nothing split off means the leftover is the whole text.
-                AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.Equals(content.AsSpan()) ? content : sentenceBuilder.ToString()));
+                if (!sentenceBuilder.Equals(content.AsSpan()))
+                    AddChunkWithMessage(text.NewWithStyle(chunk, sentenceBuilder.ToString()));
+                else if (IsOwnStyledCopy(text))
+                    AddChunkWithMessage(text);
+                else
+                    AddChunkWithMessage(text.NewWithStyle(chunk, content));
             }
         }
 
+        if (scratch != null && scratch.Sentence.Capacity <= TextScratch.MaxKeptChars && scratch.Word.Capacity <= TextScratch.MaxKeptChars)
+            SpareScratch = scratch;
+
         return newChunks;
     }
+
+    // NewWithStyle(text, text.Content) would build a chunk equal to this one in every field, Message included
+    // (set by the caller): only a plain TextChunk whose Color already is the one NewWithStyle derives qualifies.
+    private static bool IsOwnStyledCopy(TextChunk text)
+        => text.GetType() == typeof(TextChunk) && Nullable.Equals(text.Color, ColourUtil.RgbaToVector4(text.Foreground));
+
+    // The two scratch builders of CheckMessageContent, shared by all threads: whoever takes the spare owns it until
+    // putting it back, so no two constructors ever write the same builder.
+    private sealed class TextScratch
+    {
+        public const int MaxKeptChars = 4096;
+        public readonly StringBuilder Word = new();
+        public readonly StringBuilder Sentence = new();
+    }
+
+    private static TextScratch? SpareScratch;
 
     public unsafe void DecodeTextParam()
     {

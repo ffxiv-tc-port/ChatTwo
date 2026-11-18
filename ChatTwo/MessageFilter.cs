@@ -43,13 +43,15 @@ public class MessageFilter
         }
     }
 
-    public bool Blocks(string text)
+    public bool Blocks(string text) => BlocksFolded(MiddleDot.Fold(text));
+
+    /// <summary><see cref="Blocks(string)"/> on text that has already been through <see cref="MiddleDot.Fold"/>.</summary>
+    internal bool BlocksFolded(ReadOnlySpan<char> folded)
     {
-        if (!Enabled || Pattern.Length == 0 || text.Length == 0)
+        if (!Enabled || Pattern.Length == 0 || folded.Length == 0)
             return false;
 
         var compiled = Compiled;
-        var folded = MiddleDot.Fold(text);
         if (!compiled.IsRegex)
             return folded.Contains(compiled.FoldedPattern, StringComparison.OrdinalIgnoreCase);
 
@@ -166,20 +168,31 @@ public static class MessageFilterSet
         if (filters.Count == 0)
             return false;
 
-        // Folded once here so a line with U+00B7 is copied once, not once per rule; the fold inside
-        // MessageFilter.Blocks then finds nothing to replace.
-        var text = MiddleDot.Fold(TextOf(message));
-        if (text.Length == 0)
+        // TextOf's characters in a pooled buffer, folded once in place, instead of a new string per call:
+        // this runs for every line, once for the database rules and once per tab that has rules.
+        var text = new PooledChars(stackalloc char[256]);
+        try
+        {
+            AppendTextOf(ref text, message);
+            var folded = text.Written;
+            if (folded.Length == 0)
+                return false;
+
+            folded.Replace(MiddleDot.Legacy, MiddleDot.Current);
+
+            // Indexed rather than foreach: the settings window builds a whole new list and assigns
+            // it over the live one, and an enumerator would be the only thing here that could throw
+            // if that ever happened mid-scan.
+            for (var i = 0; i < filters.Count; i++)
+                if (filters[i].BlocksFolded(folded))
+                    return true;
+
             return false;
-
-        // Indexed rather than foreach: the settings window builds a whole new list and assigns
-        // it over the live one, and an enumerator would be the only thing here that could throw
-        // if that ever happened mid-scan.
-        for (var i = 0; i < filters.Count; i++)
-            if (filters[i].Blocks(text))
-                return true;
-
-        return false;
+        }
+        finally
+        {
+            text.Dispose();
+        }
     }
 
     /// <summary>
@@ -206,16 +219,28 @@ public static class MessageFilterSet
     /// </remarks>
     public static string TextOf(Message message)
     {
-        var builder = new StringBuilder();
+        var text = new PooledChars(stackalloc char[256]);
+        try
+        {
+            AppendTextOf(ref text, message);
+            return new string(text.Written);
+        }
+        finally
+        {
+            text.Dispose();
+        }
+    }
+
+    // The one definition of TextOf's characters; Blocks matches on them without making the string.
+    private static void AppendTextOf(ref PooledChars text, Message message)
+    {
         foreach (var chunk in message.Sender)
-            if (chunk is TextChunk text)
-                builder.Append(text.Content);
+            if (chunk is TextChunk textChunk)
+                text.Append(textChunk.Content);
 
         foreach (var chunk in message.Content)
-            if (chunk is TextChunk text)
-                builder.Append(text.Content);
-
-        return builder.ToString();
+            if (chunk is TextChunk textChunk)
+                text.Append(textChunk.Content);
     }
 
     /// <summary>

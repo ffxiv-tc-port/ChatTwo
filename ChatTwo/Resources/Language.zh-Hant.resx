@@ -1119,7 +1119,7 @@
     <value>日誌大小：{0}</value>
   </data>
   <data name="Options_Database_Metadata_MessageCount">
-    <value>以儲存的訊息： {0:N0}</value>
+    <value>已儲存的訊息： {0:N0}</value>
   </data>
   <data name="Options_Database_Metadata_Path">
     <value>路徑：{0}</value>

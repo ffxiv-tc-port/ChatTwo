@@ -631,6 +631,10 @@ public class MessageStore : IDisposable
     }
 
     public MessageEnumerator GetDateRange(DateTime after, DateTime before, IEnumerable<byte> channels, ulong? receiver = null)
+        => GetDateRange(Connection, after, before, channels, receiver);
+
+    /// <summary>Same as the instance overload, read on <paramref name="conn"/> rather than the store's connection.</summary>
+    public static MessageEnumerator GetDateRange(SqliteConnection conn, DateTime after, DateTime before, IEnumerable<byte> channels, ulong? receiver = null)
     {
         List<string> whereClauses = ["deleted = false"];
         if (receiver != null)
@@ -641,7 +645,7 @@ public class MessageStore : IDisposable
 
         var whereClause = $"WHERE {string.Join(" AND ", whereClauses)}";
 
-        var cmd = Connection.CreateCommand();
+        var cmd = conn.CreateCommand();
         // Select last N messages by date DESC, but reverse the order to get
         // them in ascending order.
         cmd.CommandText = @"

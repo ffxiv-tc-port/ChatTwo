@@ -824,18 +824,23 @@ public class DbViewer : Window
         DateRefresh();
     }
 
+    // Called from Draw: the query's inputs are taken here, so the player state is not read off the main thread,
+    // and the query runs on a read-only connection of its own instead of the store's shared one.
     private void CreateTxtBackup()
     {
         IsExporting = true;
+        ulong? character = OnlyCurrentCharacter ? Plugin.PlayerState.ContentId : null;
+        var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
+        var after = AfterDate;
+        var before = BeforeDate;
+        var store = Plugin.MessageManager.Store;
         Task.Run(async () =>
         {
             try
             {
-                ulong? character = OnlyCurrentCharacter ? Plugin.PlayerState.ContentId : null;
-                var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
-
                 Message[] messageHistory;
-                await using (var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels, character))
+                using (var conn = store.OpenReadOnlyConnection())
+                await using (var rangeMessageEnumerator = MessageStore.GetDateRange(conn, after, before, channels, character))
                     messageHistory = rangeMessageEnumerator.ToArray();
 
                 var filteredHistory = Filter(messageHistory);
@@ -892,17 +897,21 @@ public class DbViewer : Window
         });
     }
 
+    // Same split as CreateTxtBackup.
     private void CreateTempJsonFile()
     {
         IsExporting = true;
+        var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
+        var after = AfterDate;
+        var before = BeforeDate;
+        var store = Plugin.MessageManager.Store;
         Task.Run(async () =>
         {
             try
             {
-                var channels = SelectedChannels.Select(pair => (byte)pair.Key).ToArray();
-
                 Message[] messageHistory;
-                await using (var rangeMessageEnumerator = Plugin.MessageManager.Store.GetDateRange(AfterDate, BeforeDate, channels))
+                using (var conn = store.OpenReadOnlyConnection())
+                await using (var rangeMessageEnumerator = MessageStore.GetDateRange(conn, after, before, channels))
                     messageHistory = rangeMessageEnumerator.ToArray();
 
                 var filteredHistory = Filter(messageHistory);

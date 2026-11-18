@@ -174,16 +174,11 @@ public class MessageManager : IAsyncDisposable
         Plugin.ChatGui.ChatMessageUnhandled -= ChatMessage;
 
         await PendingThreadCancellationToken.CancelAsync();
-        var timeout = 10_000; // 10s
-        while (timeout > 0)
-        {
-            if (!PendingMessageThread.IsAlive)
-                break;
 
-            timeout -= 100;
-            await Task.Delay(100);
-            Plugin.Log.Debug("Sleeping because PendingMessageThread thread still alive");
-        }
+        // Joined on the thread pool so the caller's other teardown keeps running alongside, as with the old polling;
+        // same 10 s bound. The store is closed only after the thread is gone or the bound has passed.
+        if (!await Task.Run(() => PendingMessageThread.Join(10_000)))
+            Plugin.Log.Warning("PendingMessageThread still running after 10 s, closing the database anyway");
 
         Store.Dispose();
     }

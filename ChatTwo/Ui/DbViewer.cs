@@ -125,8 +125,7 @@ public class DbViewer : Window
     public void Dispose()
     {
         Plugin.Commands.Register("/chat2Viewer").Execute -= Toggle;
-        ListLane.Dispose(2_000);
-        ContextLane.Dispose(2_000);
+        HistoryLane.DisposeAll(2_000, ListLane, ContextLane);
     }
 
     private void Toggle(string _, string __) => Toggle();

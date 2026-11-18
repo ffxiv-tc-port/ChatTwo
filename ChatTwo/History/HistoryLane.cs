@@ -38,14 +38,24 @@ internal sealed class HistoryLane
     }
 
     /// <summary>Stops the running job and waits for it a short while, so no job outlives the plugin by much.</summary>
-    public void Dispose(int waitMs)
+    public void Dispose(int waitMs) => DisposeAll(waitMs, this);
+
+    /// <summary>
+    /// Stops every lane before waiting for any, then waits for all of them together: the waits overlap instead of
+    /// adding up, and each lane still gets at least <paramref name="waitMs"/> after its own interrupt.
+    /// </summary>
+    public static void DisposeAll(int waitMs, params HistoryLane[] lanes)
     {
-        Disposed = true;
-        Interlocked.Increment(ref Generation);
-        Interrupt();
+        foreach (var lane in lanes)
+        {
+            lane.Disposed = true;
+            Interlocked.Increment(ref lane.Generation);
+            lane.Interrupt();
+        }
+
         try
         {
-            Last.Wait(waitMs);
+            Task.WaitAll(lanes.Select(lane => lane.Last).ToArray(), waitMs);
         }
         catch (Exception)
         {

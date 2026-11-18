@@ -94,6 +94,14 @@ public sealed class Database : ISettingsTab
             ImGui.Spacing();
         }
 
+        if (ImGui.Button(Language.DbViewer_Open))
+            Plugin.DbViewer.IsOpen = true;
+
+        if (ImGui.IsItemHovered())
+            ImGuiUtil.Tooltip(Language.DbViewer_Open_Tooltip);
+
+        ImGui.Spacing();
+
         ImGui.TextUnformatted(Language.Options_Database_Metadata_Heading);
         using (ImRaii.PushIndent(ImGui.GetStyle().IndentSpacing, false))
         {

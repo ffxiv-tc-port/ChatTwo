@@ -1275,6 +1275,13 @@ public partial class ChatLog : Window, IChatWindow
             anyChanged = true;
         }
 
+        ImGui.SameLine();
+        if (ImGuiUtil.IconButton(FontAwesomeIcon.History, tooltip: Language.DbViewer_OpenTab_Tooltip))
+        {
+            Plugin.DbViewer.OpenWithChannels(tab.SelectedChannels.Keys);
+            ImGui.CloseCurrentPopup();
+        }
+
         if (anyChanged)
             Plugin.SaveConfig();
     }

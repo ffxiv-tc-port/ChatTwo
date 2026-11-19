@@ -515,7 +515,7 @@
         <value>Display previous chat session on login</value>
     </data>
     <data name="Options_LoadPreviousSession_Description">
-        <value>After logging in, populate the chat with the messages from when you last logged off.</value>
+        <value>Same as turning on "Include previous sessions when populating tabs" below: after logging in, the tabs are filled with up to 10,000 of the most recent stored messages, including those from before the game was launched. This option has no other effect.</value>
     </data>
     <data name="Options_Database_Tab">
         <value>Database</value>

@@ -506,7 +506,7 @@
     <value>登录时显示之前的聊天会话</value>
   </data>
   <data name="Options_LoadPreviousSession_Description">
-    <value>登入后，将上次登出时的消息填充聊天内容。</value>
+    <value>等同于开启下方的“在填充标签页时包括以前的会话”：登录后会从数据库加载之前的消息填充标签页（最多 10000 条）。此选项本身没有其他作用。</value>
   </data>
   <data name="Options_Database_Tab">
     <value>数据库</value>

@@ -17,7 +17,9 @@ public class Popout : Window, IChatWindow
 {
     private readonly Plugin Plugin;
     private readonly Tab Tab;
-    private readonly int Idx;
+    // Position of Tab in Config.Tabs, re-resolved every frame: deleting or moving another tab shifts it.
+    private int Idx;
+    private int PushedColourCount;
 
     private long FrameTime; // set every frame
     private long LastActivityTime = Environment.TickCount64;
@@ -51,9 +53,32 @@ public class Popout : Window, IChatWindow
 
     public override void PreOpenCheck()
     {
-        if (!Tab.PopOut)
+        var idx = FindLiveIndex(Plugin.Config.Tabs, Tab);
+        if (idx < 0 || !Tab.PopOut)
+        {
             IsOpen = false;
+            return;
+        }
+
+        Idx = idx;
     }
+
+    /// <summary>
+    /// Index of <paramref name="bound"/> in the live tab list, or -1 once that entry is gone. Matched by
+    /// reference, not Identifier: a settings save stores clones that share the Identifier but own a fresh
+    /// MessageList, so a window still bound to the old object must close and let ChatLog rebuild it.
+    /// </summary>
+    internal static int FindLiveIndex(List<Tab> tabs, Tab bound)
+    {
+        for (var i = 0; i < tabs.Count; i++)
+            if (ReferenceEquals(tabs[i], bound))
+                return i;
+
+        return -1;
+    }
+
+    private bool IsDocked
+        => (uint) Idx < (uint) Plugin.ChatLog.PopOutDocked.Count && Plugin.ChatLog.PopOutDocked[Idx];
 
     public override bool DrawConditions()
     {
@@ -103,7 +128,8 @@ public class Popout : Window, IChatWindow
         if (!Tab.CanResize)
             Flags |= ImGuiWindowFlags.NoResize;
 
-        if (!Plugin.ChatLog.PopOutDocked[Idx])
+        PushedColourCount = 0;
+        if (!IsDocked)
         {
             var alpha = Tab.IndependentOpacity ? Tab.Opacity : Plugin.Config.WindowAlpha;
             BgAlpha = alpha / 100f;
@@ -116,6 +142,7 @@ public class Popout : Window, IChatWindow
             {
                 var c = ImGui.GetStyle().Colors[(int) col];
                 ImGui.PushStyleColor(col, new Vector4(c.X, c.Y, c.Z, c.W * alphaScale));
+                PushedColourCount++;
             }
         }
     }
@@ -183,10 +210,13 @@ public class Popout : Window, IChatWindow
 
     public override void PostDraw()
     {
-        if (!Plugin.ChatLog.PopOutDocked[Idx])
-            ImGui.PopStyleColor(OpacityScaledColours.Length);
+        // Pop what PreDraw pushed, not what the docked flag says now: it is rewritten just below.
+        if (PushedColourCount > 0)
+            ImGui.PopStyleColor(PushedColourCount);
+        PushedColourCount = 0;
 
-        Plugin.ChatLog.PopOutDocked[Idx] = ImGui.IsWindowDocked();
+        if ((uint) Idx < (uint) Plugin.ChatLog.PopOutDocked.Count)
+            Plugin.ChatLog.PopOutDocked[Idx] = ImGui.IsWindowDocked();
 
         if (Plugin.Config is { OverrideStyle: true, ChosenStyle: not null })
             StyleModel.GetConfiguredStyles()?.FirstOrDefault(style => style.Name == Plugin.Config.ChosenStyle)?.Pop();

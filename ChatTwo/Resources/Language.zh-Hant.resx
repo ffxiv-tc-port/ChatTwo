@@ -1283,6 +1283,12 @@
   <data name="Options_PrintChangelog_Description" xml:space="preserve">
         <value>在變更後想聊天窗傳送變更紀錄。</value>
     </data>
+  <data name="Options_PrintChangelog_NoEffect" xml:space="preserve">
+        <value>此選項目前沒有作用：無論勾選與否，插件更新後都不會在聊天視窗印出變更紀錄。目前安裝版本的變更紀錄（若有）顯示在下方。</value>
+  </data>
+  <data name="Options_PrintChangelog_NoEffectTag" xml:space="preserve">
+        <value>（無作用）</value>
+  </data>
   <data name="Options_Warning_NotImplemented" xml:space="preserve">
         <value>此功能尚未實現。</value>
     </data>

@@ -3328,6 +3328,24 @@ namespace ChatTwo.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to This option currently has no effect: ticked or not, Chat 2 does not print the changelog to chat after an update. The changelog of the installed version (if any) is shown below..
+        /// </summary>
+        internal static string Options_PrintChangelog_NoEffect {
+            get {
+                return ResourceManager.GetString("Options_PrintChangelog_NoEffect", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to (No effect).
+        /// </summary>
+        internal static string Options_PrintChangelog_NoEffectTag {
+            get {
+                return ResourceManager.GetString("Options_PrintChangelog_NoEffectTag", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Replaces words with their emote version, currently supports BetterTTV..
         /// </summary>
         internal static string Options_ShowEmotes_Desc {

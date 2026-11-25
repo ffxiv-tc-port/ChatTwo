@@ -1282,6 +1282,12 @@
     <data name="Options_PrintChangelog_Description" xml:space="preserve">
         <value>Print the changelog to chat after an update.</value>
     </data>
+    <data name="Options_PrintChangelog_NoEffect" xml:space="preserve">
+        <value>This option currently has no effect: ticked or not, Chat 2 does not print the changelog to chat after an update. The changelog of the installed version (if any) is shown below.</value>
+    </data>
+    <data name="Options_PrintChangelog_NoEffectTag" xml:space="preserve">
+        <value>(No effect)</value>
+    </data>
     <data name="Options_Warning_NotImplemented" xml:space="preserve">
         <value>This feature isn't implemented yet</value>
     </data>

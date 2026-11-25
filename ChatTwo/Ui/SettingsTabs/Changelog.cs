@@ -1,5 +1,6 @@
 using ChatTwo.Resources;
 using ChatTwo.Util;
+using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Bindings.ImGui;
 
@@ -21,7 +22,15 @@ public sealed class Changelog : ISettingsTab
         using var wrap = ImRaii.TextWrapPos(0.0f);
 
         ImGui.TextUnformatted(Language.Options_Warning_NotImplemented);
-        ImGuiUtil.OptionCheckbox(ref Mutable.PrintChangelog, Language.Options_PrintChangelog_Name, Language.Options_PrintChangelog_Description);
+        // PrintChangelog 沒有讀取端（上游同）；畫複本、不寫回，使用者存的值原樣保留。
+        var printChangelog = Mutable.PrintChangelog;
+        using (ImRaii.Disabled())
+            ImGui.Checkbox(Language.Options_PrintChangelog_Name, ref printChangelog);
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGuiUtil.Tooltip(Language.Options_PrintChangelog_NoEffect);
+        ImGui.SameLine();
+        ImGui.TextColored(ImGuiColors.DalamudGrey, Language.Options_PrintChangelog_NoEffectTag);
+        ImGuiUtil.HelpText(Language.Options_PrintChangelog_NoEffect);
 
         ImGui.Spacing();
         ImGui.Separator();

@@ -1,19 +1,14 @@
 name: Chat 2
 author: Infi, Anna
-punchline: 電光石火 - ♪ 全新的聊天視窗，一個嶄新美妙的聊天窗口 ♪
+punchline: 取代遊戲內建聊天視窗，提供分頁、過濾與歷史搜尋。
 description: |-
-  Chat 2 是遊戲內建聊天視窗的完整重寫版插件。
-  支援功能：
-
-  - 無限分頁
-  - 固定發送到特定頻道的分頁
-  - 更靈活的過濾功能
-  - RGB 頻道顏色
-  - 完全可變字體大小
-  - 側邊欄分頁
-  - 未讀訊息計數
-  - 表情符號
-  - 截圖模式（隱藏名稱）
+  Chat 2 完整重寫遊戲內建的聊天視窗，分頁、過濾與外觀都能自訂。
+  - 分頁數量不限，可讓分頁固定發送到指定頻道，並顯示未讀訊息數
+  - 每個分頁可自訂訊息過濾條件；頻道顏色與字型大小可調整
+  - 聊天記錄存在本機，可在聊天歷史視窗依日期、頻道與關鍵字搜尋
+  - 右鍵玩家名字可傳送好友申請、加入到黑名單
+  - 表情符號、側邊欄分頁、截圖模式（隱藏玩家名稱）
+  - 網頁介面：可用瀏覽器查看聊天內容（預設關閉）
 repo_url: https://github.com/ffxiv-tc-port/ChatTwo
 icon_url: https://raw.githubusercontent.com/ffxiv-tc-port/DalamudPluginsTC/main/icons/ChatTwo.png
 accepts_feedback: true

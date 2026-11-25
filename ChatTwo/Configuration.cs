@@ -219,7 +219,7 @@ public class Configuration : IPluginConfiguration
         MaxLinesToRender = other.MaxLinesToRender;
         Use24HourClock = other.Use24HourClock;
         ShowEmotes = other.ShowEmotes;
-        BlockedEmotes = other.BlockedEmotes;
+        BlockedEmotes = other.BlockedEmotes.ToHashSet();
         FontsEnabled = other.FontsEnabled;
         ItalicEnabled = other.ItalicEnabled;
         ExtraGlyphRanges = other.ExtraGlyphRanges;
